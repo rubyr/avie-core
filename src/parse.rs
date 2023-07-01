@@ -10,6 +10,7 @@ use nom::multi::{count, many1};
 
 pub enum FenError<'a> {
     ParseErr(nom::Err<nom::error::Error<&'a str>>),
+    InvalidPiece(char),
     InvalidRow(Vec<char>),
     InvalidActivePlayer(char),
     InvalidRank(u8),
@@ -108,11 +109,13 @@ fn calculate_piece_position(parsed_board: Vec<Vec<char>>) -> Result<[[char;8];8]
         let mut result_row: Vec<char> = vec![];
         for c in row {
             match c {
-                '1'..='8' => {
-                    let x = (c as u8) - b'0';
+                '1'..='9' => {
+                    let x: u8 = c.to_digit(10).unwrap() as u8;
                     result_row.append(&mut vec!['.'; x.into()]);
                 }
-                x => result_row.push(x)
+                'r' | 'n' | 'b' | 'q' | 'k' | 'p' |
+                'R' | 'N' | 'B' | 'Q' | 'K' | 'P' => result_row.push(c),
+                x => return Err(FenError::InvalidPiece(x))
             };
         }
         if result_row.len() != 8 {
