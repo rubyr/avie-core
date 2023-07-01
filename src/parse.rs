@@ -1,8 +1,8 @@
-use nom::character::complete::{one_of, char, multispace0};
+use nom::character::complete::{one_of, char, multispace1, u8, u64};
 use nom::bytes::complete::tag;
 use nom::branch::alt;
 use nom::combinator::{recognize, opt};
-use nom::sequence::{tuple, terminated, preceded};
+use nom::sequence::{tuple, terminated, preceded, pair};
 use nom::IResult;
 use nom::multi::{count, many1};
 
@@ -10,51 +10,74 @@ pub enum FenError<'a> {
     ParseErr(nom::Err<nom::error::Error<&'a str>>),
     InvalidRow(Vec<char>),
     InvalidActivePlayer(char),
+    InvalidRank(u8),
+    InvalidFile(u8)
 }
 
 pub struct ParsedGameState {
     piece_position: [[char;8];8],
     active_player: ActivePlayer,
     castling_rights: CastlingRights,
-    en_passant: Option<(Rank, File)>,
+    en_passant_target: Option<(Rank, File)>,
     half_turn_clock: u8,
-    full_turn_clock: u32
+    full_turn_clock: u64
 }
 
 pub struct CastlingRights {
     black_kingside: bool,
     black_queenside: bool,
     white_kingside: bool,
-    white_queenside:bool
+    white_queenside: bool
 }
 #[repr(u8)]
 pub enum Rank {
-    A,
-    B,
-    C,
-    D,
-    E,
-    F,
-    G,
-    H
-}
-#[repr(u8)]
-pub enum File {
-    One,
-    Two,
-    Three,
-    Four,
-    Five,
-    Six,
-    Seven,
-    Eight
+    A = 0,
+    B = 1,
+    C = 2,
+    D = 3,
+    E = 4,
+    F = 5,
+    G = 6,
+    H = 7
 }
 
-pub fn fen_to_game(input: &str) -> Result<(), FenError>{
-    match tuple((fen_board, preceded(multispace0, fen_active_player), preceded(multispace0, fen_castling)))(input) {
+impl TryFrom<u8> for Rank {
+    type Error = u8;
+    fn try_from(rank: u8) -> Result<Rank, Self::Error>{
+        match rank {
+            0..=7 => Ok(unsafe{std::mem::transmute(rank)}),
+            x => Err(x)
+        }
+    }
+}
+
+#[repr(u8)]
+pub enum File {
+    One   = 0,
+    Two   = 1,
+    Three = 2,
+    Four  = 3,
+    Five  = 4,
+    Six   = 5,
+    Seven = 6,
+    Eight = 7
+}
+
+impl TryFrom<u8> for File {
+    type Error = u8;
+    fn try_from(rank: u8) -> Result<File, Self::Error>{
+        match rank {
+            0..=7 => Ok(unsafe{std::mem::transmute(rank)}),
+            x => Err(x)
+        }
+    }
+}
+
+pub fn fen_to_game(input: &str) -> Result<ParsedGameState, FenError>{
+    match tuple((fen_board, preceded(multispace1, fen_active_player), preceded(multispace1, fen_castling), preceded(multispace1, fen_en_passant_target), preceded(multispace1, u8), preceded(multispace1, u64)))(input) {
         Err(e) => return Err(FenError::ParseErr(e)),
-        Ok((_, (parsed_board, parsed_active_player, parsed_castling_rights))) => {
-            let mut board: [[char;8];8] = [['.';8];8];
+        Ok((_, (parsed_board, parsed_active_player, parsed_castling_rights, parsed_en_passant_target, half_turn_clock, full_turn_clock))) => {
+            let mut piece_position: [[char;8];8] = [['.';8];8];
             for (num, row) in parsed_board.into_iter().enumerate(){
                 let mut result_row: Vec<char> = vec![];
                 for c in row {
@@ -70,7 +93,7 @@ pub fn fen_to_game(input: &str) -> Result<(), FenError>{
                     return Err(FenError::InvalidRow(result_row));
                 }
                 else {
-                    board[num] = result_row[0..8].try_into().unwrap();
+                    piece_position[num] = result_row[0..8].try_into().unwrap();
                 }
             }
             let active_player = match parsed_active_player {
@@ -78,16 +101,28 @@ pub fn fen_to_game(input: &str) -> Result<(), FenError>{
                 'w' => ActivePlayer::White,
                 x => return Err(FenError::InvalidActivePlayer(x))
             };
+            let black_kingside = parsed_castling_rights.contains('k');
+            let black_queenside = parsed_castling_rights.contains('q');
+            let white_kingside = parsed_castling_rights.contains('K');
+            let white_queenside = parsed_castling_rights.contains('Q');
+            let castling_rights = CastlingRights{black_kingside, black_queenside, white_kingside, white_queenside};
+            let en_passant_target = match parsed_en_passant_target {
+                "-" => None,
+                x => {
+                    let rank = match Rank::try_from(x.as_bytes()[0] - b'a'){
+                        Ok(rank) => rank,
+                        Err(x) => return Err(FenError::InvalidRank(x))
+                    };
+                    let file = match File::try_from(x.as_bytes()[0] - b'a'){
+                        Ok(file) => file,
+                        Err(x) => return Err(FenError::InvalidFile(x))
+                    };
+                    Some((rank, file))
+                }
+            };
+            Ok(ParsedGameState{piece_position, active_player, castling_rights, en_passant_target, half_turn_clock, full_turn_clock })
         }
     }
-    
-    if let Ok((rest, board_parse)) = fen_board(input) {
-        
-        if let Ok((rest, active_player)) = preceded(multispace0, fen_active_player)(rest) {
-            
-        }
-    }
-    todo!()
 }
 
 pub enum ActivePlayer {
@@ -105,4 +140,8 @@ fn fen_active_player(input: &str) -> IResult<&str, char> {
 
 fn fen_castling(input: &str) -> IResult<&str, &str> {
     alt((tag("-"),recognize(many1(one_of("KQkq")))))(input)
+}
+
+fn fen_en_passant_target(input: &str) -> IResult<&str, &str> {
+    alt((tag("-"), recognize(pair(one_of("abcdefgh"), one_of("12345678")))))(input)
 }
