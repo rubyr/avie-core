@@ -6,6 +6,9 @@ use nom::sequence::{tuple, terminated, preceded, pair};
 use nom::IResult;
 use nom::multi::{count, many1};
 
+#[derive(PartialEq, Debug)]
+#[allow(dead_code)]
+
 pub enum FenError<'a> {
     ParseErr(nom::Err<nom::error::Error<&'a str>>),
     InvalidRow(Vec<char>),
@@ -14,22 +17,34 @@ pub enum FenError<'a> {
     InvalidFile(u8)
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct ParsedGameState {
-    piece_position: [[char;8];8],
-    active_player: ActivePlayer,
-    castling_rights: CastlingRights,
-    en_passant_target: Option<(Rank, File)>,
-    half_turn_clock: u8,
-    full_turn_clock: u64
+    pub piece_position: [[char;8];8],
+    pub active_player: ActivePlayer,
+    pub castling_rights: CastlingRights,
+    pub en_passant_target: Option<(Rank, File)>,
+    pub half_turn_clock: u8,
+    pub full_turn_clock: u64
 }
 
-pub struct CastlingRights {
-    black_kingside: bool,
-    black_queenside: bool,
-    white_kingside: bool,
-    white_queenside: bool
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[allow(dead_code)]
+pub enum ActivePlayer {
+    Black,
+    White
 }
+
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct CastlingRights {
+    pub black_kingside: bool,
+    pub black_queenside: bool,
+    pub white_kingside: bool,
+    pub white_queenside: bool
+}
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
+#[allow(dead_code)]
 pub enum Rank {
     A = 0,
     B = 1,
@@ -51,7 +66,9 @@ impl TryFrom<u8> for Rank {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
+#[allow(dead_code)]
 pub enum File {
     One   = 0,
     Two   = 1,
@@ -123,11 +140,6 @@ pub fn fen_to_game(input: &str) -> Result<ParsedGameState, FenError>{
             Ok(ParsedGameState{piece_position, active_player, castling_rights, en_passant_target, half_turn_clock, full_turn_clock })
         }
     }
-}
-
-pub enum ActivePlayer {
-    Black,
-    White
 }
 
 fn fen_board(input: &str) -> IResult<&str, Vec<Vec<char>>>{
