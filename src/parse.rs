@@ -7,7 +7,6 @@ use nom::IResult;
 use nom::multi::{count, many1};
 
 #[derive(PartialEq, Debug)]
-#[allow(dead_code)]
 
 pub enum FenError<'a> {
     ParseErr(nom::Err<nom::error::Error<&'a str>>),
@@ -28,7 +27,6 @@ pub struct ParsedGameState {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[allow(dead_code)]
 pub enum ActivePlayer {
     Black,
     White
@@ -44,7 +42,6 @@ pub struct CastlingRights {
 }
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
-#[allow(dead_code)]
 pub enum Rank {
     A = 0,
     B = 1,
@@ -68,7 +65,6 @@ impl TryFrom<u8> for Rank {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
-#[allow(dead_code)]
 pub enum File {
     One   = 0,
     Two   = 1,
@@ -88,6 +84,22 @@ impl TryFrom<u8> for File {
             x => Err(x)
         }
     }
+}
+
+fn fen_board(input: &str) -> IResult<&str, Vec<Vec<char>>>{
+    count(terminated(many1(one_of("rnbqkpRNBQKP12345678")), opt(char('/'))), 8)(input)
+}
+
+fn fen_active_player(input: &str) -> IResult<&str, char> {
+    one_of("wb")(input)
+}
+
+fn fen_castling(input: &str) -> IResult<&str, &str> {
+    alt((tag("-"),recognize(many1(one_of("KQkq")))))(input)
+}
+
+fn fen_en_passant_target(input: &str) -> IResult<&str, &str> {
+    alt((tag("-"), recognize(pair(one_of("abcdefgh"), one_of("12345678")))))(input)
 }
 
 pub fn fen_to_game(input: &str) -> Result<ParsedGameState, FenError>{
@@ -140,20 +152,4 @@ pub fn fen_to_game(input: &str) -> Result<ParsedGameState, FenError>{
             Ok(ParsedGameState{piece_position, active_player, castling_rights, en_passant_target, half_turn_clock, full_turn_clock })
         }
     }
-}
-
-fn fen_board(input: &str) -> IResult<&str, Vec<Vec<char>>>{
-    count(terminated(many1(one_of("rnbqkpRNBQKP12345678")), opt(char('/'))), 8)(input)
-}
-
-fn fen_active_player(input: &str) -> IResult<&str, char> {
-    one_of("wb")(input)
-}
-
-fn fen_castling(input: &str) -> IResult<&str, &str> {
-    alt((tag("-"),recognize(many1(one_of("KQkq")))))(input)
-}
-
-fn fen_en_passant_target(input: &str) -> IResult<&str, &str> {
-    alt((tag("-"), recognize(pair(one_of("abcdefgh"), one_of("12345678")))))(input)
 }
