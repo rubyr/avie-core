@@ -176,12 +176,12 @@ fn calculate_piece_position(
     for (num, row) in parsed_board.into_iter().enumerate() {
         let mut result_row: Vec<char> = vec![];
         for c in row {
-            match c {
+            match c.to_ascii_lowercase() {
                 '1'..='9' => {
                     let x: u8 = c.to_digit(10).unwrap() as u8;
                     result_row.append(&mut vec!['.'; x.into()]);
                 }
-                'r' | 'n' | 'b' | 'q' | 'k' | 'p' | 'R' | 'N' | 'B' | 'Q' | 'K' | 'P' => {
+                'r' | 'n' | 'b' | 'q' | 'k' | 'p'  => {
                     result_row.push(c)
                 }
                 x => return Err(FenError::InvalidPiece(x)),
