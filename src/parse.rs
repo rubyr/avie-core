@@ -102,29 +102,34 @@ fn fen_en_passant_target(input: &str) -> IResult<&str, &str> {
     alt((tag("-"), recognize(pair(one_of("abcdefgh"), one_of("12345678")))))(input)
 }
 
+fn calculate_piece_position(parsed_board: Vec<Vec<char>>) -> Result<[[char;8];8], FenError<'static>> {
+    let mut piece_position = [['.';8];8];
+    for (num, row) in parsed_board.into_iter().enumerate(){
+        let mut result_row: Vec<char> = vec![];
+        for c in row {
+            match c {
+                '1'..='8' => {
+                    let x = (c as u8) - b'0';
+                    result_row.append(&mut vec!['.'; x.into()]);
+                }
+                x => result_row.push(x)
+            };
+        }
+        if result_row.len() != 8 {
+            return Err(FenError::InvalidRow(result_row));
+        }
+        else {
+            piece_position[num] = result_row[0..8].try_into().unwrap();
+        }
+    };
+    Ok(piece_position)
+}
+
 pub fn fen_to_game(input: &str) -> Result<ParsedGameState, FenError>{
     match tuple((fen_board, preceded(multispace1, fen_active_player), preceded(multispace1, fen_castling), preceded(multispace1, fen_en_passant_target), preceded(multispace1, u8), preceded(multispace1, u64)))(input) {
         Err(e) => return Err(FenError::ParseErr(e)),
         Ok((_, (parsed_board, parsed_active_player, parsed_castling_rights, parsed_en_passant_target, half_turn_clock, full_turn_clock))) => {
-            let mut piece_position: [[char;8];8] = [['.';8];8];
-            for (num, row) in parsed_board.into_iter().enumerate(){
-                let mut result_row: Vec<char> = vec![];
-                for c in row {
-                    match c {
-                        '1'..='8' => {
-                            let x = (c as u8) - b'0';
-                            result_row.append(&mut vec!['.'; x.into()]);
-                        }
-                        x => result_row.push(x)
-                    };
-                }
-                if result_row.len() != 8 {
-                    return Err(FenError::InvalidRow(result_row));
-                }
-                else {
-                    piece_position[num] = result_row[0..8].try_into().unwrap();
-                }
-            }
+            let piece_position: [[char;8];8] = calculate_piece_position(parsed_board)?;
             let active_player = match parsed_active_player {
                 'b' => ActivePlayer::Black,
                 'w' => ActivePlayer::White,
