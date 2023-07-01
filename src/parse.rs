@@ -5,6 +5,7 @@ use nom::combinator::{opt, recognize};
 use nom::multi::{count, many1};
 use nom::sequence::{pair, preceded, terminated, tuple};
 use nom::IResult;
+#[cfg(test)]
 mod test{
     use crate::parse::*;
     #[test]
