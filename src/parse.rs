@@ -130,7 +130,7 @@ pub fn fen_to_game(input: &str) -> Result<ParsedGameState, FenError>{
                         Ok(rank) => rank,
                         Err(x) => return Err(FenError::InvalidRank(x))
                     };
-                    let file = match File::try_from(x.as_bytes()[0] - b'a'){
+                    let file = match File::try_from(x.as_bytes()[1] - b'1'){
                         Ok(file) => file,
                         Err(x) => return Err(FenError::InvalidFile(x))
                     };
