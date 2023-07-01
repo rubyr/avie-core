@@ -249,15 +249,11 @@ pub fn fen_to_game(input: &str) -> Result<ParsedGameState, FenError> {
                 'w' => ActivePlayer::White,
                 x => return Err(FenError::InvalidActivePlayer(x)),
             };
-            let black_kingside = parsed_castling_rights.contains('k');
-            let black_queenside = parsed_castling_rights.contains('q');
-            let white_kingside = parsed_castling_rights.contains('K');
-            let white_queenside = parsed_castling_rights.contains('Q');
             let castling_rights = CastlingRights {
-                black_kingside,
-                black_queenside,
-                white_kingside,
-                white_queenside,
+                black_kingside: parsed_castling_rights.contains('k'),
+                black_queenside: parsed_castling_rights.contains('q'),
+                white_kingside: parsed_castling_rights.contains('K'),
+                white_queenside: parsed_castling_rights.contains('Q'),
             };
             let en_passant_target = calculate_en_passant_target(parsed_en_passant_target)?;
             Ok(ParsedGameState {
