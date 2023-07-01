@@ -13,8 +13,9 @@ pub enum FenError<'a> {
     InvalidPiece(char),
     InvalidRow(Vec<char>),
     InvalidActivePlayer(char),
-    InvalidRank(u8),
-    InvalidFile(u8)
+    InvalidPosition,
+    InvalidRank(char),
+    InvalidFile(char)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -54,11 +55,11 @@ pub enum Rank {
     H = 7
 }
 
-impl TryFrom<u8> for Rank {
-    type Error = u8;
-    fn try_from(rank: u8) -> Result<Rank, Self::Error>{
+impl TryFrom<char> for Rank {
+    type Error = char;
+    fn try_from(rank: char) -> Result<Rank, Self::Error>{
         match rank {
-            0..=7 => Ok(unsafe{std::mem::transmute(rank)}),
+            'a'..='h' => Ok(unsafe{std::mem::transmute((rank as u8) - b'a')}),
             x => Err(x)
         }
     }
@@ -77,11 +78,11 @@ pub enum File {
     Eight = 7
 }
 
-impl TryFrom<u8> for File {
-    type Error = u8;
-    fn try_from(rank: u8) -> Result<File, Self::Error>{
-        match rank {
-            0..=7 => Ok(unsafe{std::mem::transmute(rank)}),
+impl TryFrom<char> for File {
+    type Error = char;
+    fn try_from(file: char) -> Result<File, Self::Error>{
+        match file {
+            '1'..='8' => Ok(unsafe{std::mem::transmute((file as u8) - b'1')}),
             x => Err(x)
         }
     }
@@ -128,6 +129,29 @@ fn calculate_piece_position(parsed_board: Vec<Vec<char>>) -> Result<[[char;8];8]
     Ok(piece_position)
 }
 
+fn calculate_en_passant_target(parsed_en_passant_target: &str) -> Result<Option<(Rank, File)>, FenError> {
+    match parsed_en_passant_target {
+        "-" => Ok(None),
+        x => {
+            let rank = match x.chars().nth(0).map(Rank::try_from){
+                None => return Err(FenError::InvalidPosition),
+                Some(x) =>match x {
+                    Ok(rank) => rank,
+                    Err(x) => return Err(FenError::InvalidRank(x))
+                }
+            };
+            let file = match x.chars().nth(1).map(File::try_from){
+                None => return Err(FenError::InvalidPosition),
+                Some(x) =>match x {
+                    Ok(file) => file,
+                    Err(x) => return Err(FenError::InvalidFile(x))
+                }
+            };
+            Ok(Some((rank, file)))
+        }
+    }
+}
+
 pub fn fen_to_game(input: &str) -> Result<ParsedGameState, FenError>{
     match tuple((fen_board, preceded(multispace1, fen_active_player), preceded(multispace1, fen_castling), preceded(multispace1, fen_en_passant_target), preceded(multispace1, u8), preceded(multispace1, u64)))(input) {
         Err(e) => return Err(FenError::ParseErr(e)),
@@ -143,20 +167,7 @@ pub fn fen_to_game(input: &str) -> Result<ParsedGameState, FenError>{
             let white_kingside = parsed_castling_rights.contains('K');
             let white_queenside = parsed_castling_rights.contains('Q');
             let castling_rights = CastlingRights{black_kingside, black_queenside, white_kingside, white_queenside};
-            let en_passant_target = match parsed_en_passant_target {
-                "-" => None,
-                x => {
-                    let rank = match Rank::try_from(x.as_bytes()[0] - b'a'){
-                        Ok(rank) => rank,
-                        Err(x) => return Err(FenError::InvalidRank(x))
-                    };
-                    let file = match File::try_from(x.as_bytes()[1] - b'1'){
-                        Ok(file) => file,
-                        Err(x) => return Err(FenError::InvalidFile(x))
-                    };
-                    Some((rank, file))
-                }
-            };
+            let en_passant_target = calculate_en_passant_target(parsed_en_passant_target)?;
             Ok(ParsedGameState{piece_position, active_player, castling_rights, en_passant_target, half_turn_clock, full_turn_clock })
         }
     }
