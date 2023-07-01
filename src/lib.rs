@@ -2,6 +2,8 @@ pub fn add(left: usize, right: usize) -> usize {
     left + right
 }
 
+mod parse;
+
 #[cfg(test)]
 mod tests {
     use super::*;
