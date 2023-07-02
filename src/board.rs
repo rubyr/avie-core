@@ -13,6 +13,9 @@ struct PlayerState {
 }
 
 impl PlayerState {
+    ///function uses a quirk of binary representation to verify that there are no duplicate pieces on the board.
+    /// when no bits are shared between two numbers, addition gives the same result as binary OR. by adding all 
+    /// bitboards together and comparing with all bitboards OR'd together, we can ensure that a player's state is valid.
     fn is_valid(&self) -> bool {
         let mut valid = self.king.count_ones() == 1;
         let add_board: u128 = self.king as u128 + self.queens as u128 + self.bishops as u128 + self.knights as u128 + self.rooks as u128 + self.pawns as u128;
@@ -29,10 +32,10 @@ enum Player {
     White
 }
 
-//En Passant Target representation:
-//  0bX0000000: active flag. if 1, there was no en passant on the previous turn, and all other bits are ignored.
-//  0b0X000000: player flag. 0 for white, 1 for black.
-//  0b00XXXXXX: square of valid en passant target. bitboard is obtained by shifting 1u64 by this value.
+///En Passant Target representation:
+///  0bX0000000: active flag. if 1, there was no en passant on the previous turn, and all other bits are ignored.
+///  0b0X000000: player flag. 0 for white, 1 for black.
+///  0b00XXXXXX: square of valid en passant target. bitboard is obtained by shifting 1u64 by this value.
 struct EnPassantTarget(u8);
 
 impl EnPassantTarget {
