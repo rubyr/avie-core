@@ -1,10 +1,12 @@
 use nom::branch::alt;
 use nom::bytes::complete::tag;
-use nom::character::complete::{char, multispace1, one_of, u64, u8};
+use nom::character::complete::{char, multispace1, one_of, u32, u8};
 use nom::combinator::{opt, recognize};
 use nom::multi::{count, many1};
 use nom::sequence::{pair, preceded, terminated, tuple};
 use nom::IResult;
+use crate::gamestate::{ParsedGameState, File, Rank, Player, CastlingRights};
+
 #[cfg(test)]
 mod test{
     use crate::parse::*;
@@ -24,7 +26,7 @@ mod test{
                     ['P'; 8],
                     ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
                 ],
-                active_player: ActivePlayer::White,
+                active_player: Player::White,
                 castling_rights: CastlingRights {
                     black_kingside: true,
                     black_queenside: true,
@@ -54,14 +56,14 @@ mod test{
                     ['P', 'P', 'P', 'P', '.', 'P', 'P', 'P'],
                     ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
                 ],
-                active_player: ActivePlayer::Black,
+                active_player: Player::Black,
                 castling_rights: CastlingRights {
                     black_kingside: true,
                     black_queenside: true,
                     white_kingside: true,
                     white_queenside: true
                 },
-                en_passant_target: Some((Rank::E, File::Three)),
+                en_passant_target: Some((File::E, Rank::Three)),
                 half_turn_clock: 0,
                 full_turn_clock: 1
             })
@@ -79,75 +81,6 @@ pub enum FenError<'a> {
     InvalidPosition,
     InvalidRank(char),
     InvalidFile(char),
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct ParsedGameState {
-    pub piece_position: [[char; 8]; 8],
-    pub active_player: ActivePlayer,
-    pub castling_rights: CastlingRights,
-    pub en_passant_target: Option<(Rank, File)>,
-    pub half_turn_clock: u8,
-    pub full_turn_clock: u64,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum ActivePlayer {
-    Black,
-    White,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct CastlingRights {
-    pub black_kingside: bool,
-    pub black_queenside: bool,
-    pub white_kingside: bool,
-    pub white_queenside: bool,
-}
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[repr(u8)]
-pub enum Rank {
-    A = 0,
-    B = 1,
-    C = 2,
-    D = 3,
-    E = 4,
-    F = 5,
-    G = 6,
-    H = 7,
-}
-
-impl TryFrom<char> for Rank {
-    type Error = char;
-    fn try_from(rank: char) -> Result<Rank, Self::Error> {
-        match rank {
-            'a'..='h' => Ok(unsafe { std::mem::transmute((rank as u8) - b'a') }),
-            x => Err(x),
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[repr(u8)]
-pub enum File {
-    One = 0,
-    Two = 1,
-    Three = 2,
-    Four = 3,
-    Five = 4,
-    Six = 5,
-    Seven = 6,
-    Eight = 7,
-}
-
-impl TryFrom<char> for File {
-    type Error = char;
-    fn try_from(file: char) -> Result<File, Self::Error> {
-        match file {
-            '1'..='8' => Ok(unsafe { std::mem::transmute((file as u8) - b'1') }),
-            x => Err(x),
-        }
-    }
 }
 
 fn fen_board(input: &str) -> IResult<&str, Vec<Vec<char>>> {
@@ -201,25 +134,25 @@ fn calculate_piece_position(
 
 fn calculate_en_passant_target(
     parsed_en_passant_target: &str,
-) -> Result<Option<(Rank, File)>, FenError> {
+) -> Result<Option<(File, Rank)>, FenError> {
     match parsed_en_passant_target {
         "-" => Ok(None),
         x => {
-            let rank = match x.chars().nth(0).map(Rank::try_from) {
+            let file = match x.chars().nth(0).map(File::try_from) {
                 None => return Err(FenError::InvalidPosition),
                 Some(x) => match x {
                     Ok(rank) => rank,
                     Err(x) => return Err(FenError::InvalidRank(x)),
                 },
             };
-            let file = match x.chars().nth(1).map(File::try_from) {
+            let rank = match x.chars().nth(1).map(Rank::try_from) {
                 None => return Err(FenError::InvalidPosition),
                 Some(x) => match x {
                     Ok(file) => file,
                     Err(x) => return Err(FenError::InvalidFile(x)),
                 },
             };
-            Ok(Some((rank, file)))
+            Ok(Some((file, rank)))
         }
     }
 }
@@ -231,7 +164,7 @@ pub fn fen_to_game(input: &str) -> Result<ParsedGameState, FenError> {
         preceded(multispace1, fen_castling),
         preceded(multispace1, fen_en_passant_target),
         preceded(multispace1, u8),
-        preceded(multispace1, u64),
+        preceded(multispace1, u32),
     ))(input)
     {
         Err(e) => return Err(FenError::ParseErr(e)),
@@ -248,8 +181,8 @@ pub fn fen_to_game(input: &str) -> Result<ParsedGameState, FenError> {
         )) => {
             let piece_position: [[char; 8]; 8] = calculate_piece_position(parsed_board)?;
             let active_player = match parsed_active_player {
-                'b' => ActivePlayer::Black,
-                'w' => ActivePlayer::White,
+                'b' => Player::Black,
+                'w' => Player::White,
                 x => return Err(FenError::InvalidActivePlayer(x)),
             };
             let castling_rights = CastlingRights {
