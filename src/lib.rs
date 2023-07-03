@@ -3,6 +3,7 @@ pub fn add(left: usize, right: usize) -> usize {
 }
 
 mod parse;
+mod board;
 
 #[cfg(test)]
 mod tests {
