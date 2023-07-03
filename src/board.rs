@@ -1,7 +1,110 @@
 use crate::gamestate::{ParsedGameState, Player, File, Rank};
 #[cfg(test)]
-mod test {}
+mod test {
+    use super::*;
+    use crate::gamestate::*;
+    #[test]
+    fn boardstate_new() {
+        let result = BoardState::new(ParsedGameState {
+            piece_position: [
+                ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+                ['p'; 8],
+                ['.'; 8],
+                ['.'; 8],
+                ['.'; 8],
+                ['.'; 8],
+                ['P'; 8],
+                ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
+            ],
+            active_player: Player::White,
+            castling_rights: CastlingRights {
+                black_kingside: true,
+                black_queenside: true,
+                white_kingside: true,
+                white_queenside: true
+            },
+            en_passant_target: None,
+            half_turn_clock: 0,
+            full_turn_clock: 1
+        });
+        assert_eq!(result, BoardState{
+            black: PlayerState { 
+                king: 0x0800000000000000, 
+                queens: 0x1000000000000000, 
+                bishops: 0x2400000000000000, 
+                knights: 0x4200000000000000, 
+                rooks: 0x8100000000000000, 
+                pawns: 0x00FF000000000000, 
+                king_castle: true, 
+                queen_castle: true
+            },
+            white: PlayerState {
+                king: 0x08,
+                queens: 0x10,
+                bishops: 0x24,
+                knights: 0x42,
+                rooks: 0x81,
+                pawns: 0xFF00,
+                king_castle: true, 
+                queen_castle: true
+            },
+            active_player: Player::White,
+            en_passant_target: EnPassantTarget(0x80),
+            half_counter: 0,
+            full_counter: 1
+        });
+        let result = BoardState::new(ParsedGameState {
+            piece_position: [
+                ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
+                ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'],
+                ['.', '.', '.', '.', '.', '.', '.', '.'],
+                ['.', '.', '.', '.', '.', '.', '.', '.'],
+                ['.', '.', '.', '.', 'P', '.', '.', '.'],
+                ['.', '.', '.', '.', '.', '.', '.', '.'],
+                ['P', 'P', 'P', 'P', '.', 'P', 'P', 'P'],
+                ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R']
+            ],
+            active_player: Player::Black,
+            castling_rights: CastlingRights {
+                black_kingside: true,
+                black_queenside: true,
+                white_kingside: true,
+                white_queenside: true
+            },
+            en_passant_target: Some((File::E, Rank::Three)),
+            half_turn_clock: 0,
+            full_turn_clock: 1
+        });
+        assert_eq!(result, BoardState{
+            black: PlayerState { 
+                king: 0x0800000000000000, 
+                queens: 0x1000000000000000, 
+                bishops: 0x2400000000000000, 
+                knights: 0x4200000000000000, 
+                rooks: 0x8100000000000000, 
+                pawns: 0x00FF000000000000, 
+                king_castle: true, 
+                queen_castle: true
+            },
+            white: PlayerState {
+                king: 0x08,
+                queens: 0x10,
+                bishops: 0x24,
+                knights: 0x42,
+                rooks: 0x81,
+                pawns: 0x0800F700,
+                king_castle: true, 
+                queen_castle: true
+            },
+            active_player: Player::Black,
+            en_passant_target: EnPassantTarget(0x13),
+            half_counter: 0,
+            full_counter: 1
+        });
+    }
+}
 
+#[derive(Clone, PartialEq, Eq, Debug)]
 struct PlayerState {
     king: u64,
     queens: u64,
@@ -37,6 +140,7 @@ impl PlayerState {
 ///  0bX0000000: active flag. if 1, there was no en passant on the previous turn, and all other bits are ignored.
 ///  0b0X000000: player flag. 0 for white, 1 for black.
 ///  0b00XXXXXX: square of valid en passant target. bitboard is obtained by shifting 1u64 by this value.
+#[derive(Clone, PartialEq, Eq, Debug)]
 struct EnPassantTarget(u8);
 
 impl EnPassantTarget {
@@ -53,6 +157,7 @@ impl EnPassantTarget {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BoardState {
     black: PlayerState,
     white: PlayerState,
