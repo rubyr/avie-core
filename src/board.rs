@@ -1,5 +1,106 @@
 #[cfg(test)]
-mod test {}
+mod test {
+    
+    use super::*;
+    #[test]
+    fn king_moves_empty_board() {
+        let board = BoardState {
+            white:PlayerState{king:0x0000000800000000, queens: 0, rooks: 0, pawns: 0, bishops: 0, knights: 0, queen_castle: false, king_castle: false},
+            black: PlayerState{king:0, queens: 0, rooks: 0, pawns: 0, bishops: 0, knights: 0, queen_castle: false, king_castle: false},
+            active_player: Player::White,
+            en_passant_target: EnPassantTarget(0x80),
+            full_counter: 1,
+            half_counter: 0
+        };
+        let king_move = board.king_moves();
+        assert_eq!(king_move, 0x00001C141C000000);
+        let board = BoardState {
+            white:PlayerState{king:0x0000000100000000, queens: 0, rooks: 0, pawns: 0, bishops: 0, knights: 0, queen_castle: false, king_castle: false},
+            black: PlayerState{king:0, queens: 0, rooks: 0, pawns: 0, bishops: 0, knights: 0, queen_castle: false, king_castle: false},
+            active_player: Player::White,
+            en_passant_target: EnPassantTarget(0x80),
+            full_counter: 1,
+            half_counter: 0
+        };
+        let king_move = board.king_moves();
+        assert_eq!(king_move, 0x0000030203000000);
+        let board = BoardState {
+            white:PlayerState{king:0x0000008000000000, queens: 0, rooks: 0, pawns: 0, bishops: 0, knights: 0, queen_castle: false, king_castle: false},
+            black: PlayerState{king:0, queens: 0, rooks: 0, pawns: 0, bishops: 0, knights: 0, queen_castle: false, king_castle: false},
+            active_player: Player::White,
+            en_passant_target: EnPassantTarget(0x80),
+            full_counter: 1,
+            half_counter: 0
+        };
+        let king_move = board.king_moves();
+        assert_eq!(king_move, 0x0000C040C0000000);
+        //for i in 0..=7u8 {
+        //    let row = (king_move >> (56 - (i * 8))) as u8;
+        //    println!("{:08b}", row);
+        //}
+    }
+    #[test]
+    fn king_moves_starting_board() {
+        let board = BoardState{
+            black: PlayerState { 
+                king: 0x0800000000000000, 
+                queens: 0x1000000000000000, 
+                bishops: 0x2400000000000000, 
+                knights: 0x4200000000000000, 
+                rooks: 0x8100000000000000, 
+                pawns: 0x00FF000000000000, 
+                king_castle: true, 
+                queen_castle: true
+            },
+            white: PlayerState {
+                king: 0x08,
+                queens: 0x10,
+                bishops: 0x24,
+                knights: 0x42,
+                rooks: 0x81,
+                pawns: 0xFF00,
+                king_castle: true, 
+                queen_castle: true
+            },
+            active_player: Player::White,
+            en_passant_target: EnPassantTarget(0x80),
+            half_counter: 0,
+            full_counter: 1
+        };
+        assert_eq!(board.king_moves(), 0x0);
+    }
+    #[test]
+    fn king_moves_bongcloud() {
+        let board = BoardState{
+            black: PlayerState {
+                king: 0x0800000000000000,
+                queens: 0x1000000000000000,
+                bishops: 0x2400000000000000,
+                knights: 0x4200000000000000,
+                rooks: 0x8100000000000000,
+                pawns: 0x00F7080000000000,
+                king_castle: true, 
+                queen_castle: true
+            },
+            white: PlayerState {
+                king: 0x08,
+                queens: 0x10,
+                bishops: 0x24,
+                knights: 0x42,
+                rooks: 0x81,
+                pawns: 0x0800F700,
+                king_castle: true, 
+                queen_castle: true
+            },
+            active_player: Player::White,
+            en_passant_target: EnPassantTarget(0x13),
+            half_counter: 0,
+            full_counter: 2
+        };
+        let king_move = board.king_moves();
+        assert_eq!(board.king_moves(), 0x0000000000000800);
+    }
+}
 
 struct PlayerState {
     king: u64,
