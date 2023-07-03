@@ -1,3 +1,4 @@
+
 #[cfg(test)]
 mod test {}
 
@@ -11,6 +12,7 @@ struct PlayerState {
     king_castle: bool,
     queen_castle: bool
 }
+
 
 impl PlayerState {
     ///function uses a quirk of binary representation to verify that there are no duplicate pieces on the board.
@@ -31,6 +33,7 @@ enum Player {
     Black,
     White
 }
+
 
 ///En Passant Target representation:
 ///  0bX0000000: active flag. if 1, there was no en passant on the previous turn, and all other bits are ignored.
