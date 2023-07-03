@@ -82,37 +82,45 @@ impl BoardState {
     fn pawn_double_pushes(&self) -> u64 {
         if self.active_player == Player::Black {
             let pawns = self.black.pawns & 0x00FF000000000000;
-            let enemy_pieces = self.all_pieces() & !pawns;
-            (pawns >> 16) & (!enemy_pieces) & (!(enemy_pieces >> 8))
+            let other_pieces = self.all_pieces() & !pawns;
+            (pawns >> 16) & (!other_pieces) & (!(other_pieces >> 8))
         }
         else {
             let pawns = self.white.pawns & 0x000000000000FF00;
-            let enemy_pieces = self.all_pieces() & !pawns;
-            (pawns << 16) & (!enemy_pieces) & (!(enemy_pieces << 8))
+            let other_pieces = self.all_pieces() & !pawns;
+            (pawns << 16) & (!other_pieces) & (!(other_pieces << 8))
         }
     }
 
     fn pawn_west_attacks(&self) -> u64 {
         let not_h_file = 0xFEFEFEFEFEFEFEFEu64;
         if self.active_player == Player::Black {
+            let enemy_pieces = self.white.all_pieces();
             let pawns = self.black.pawns;
-            (pawns >> 9) & not_h_file
+            let attack_squares = (pawns >> 9) & not_h_file;
+            attack_squares & (enemy_pieces | self.en_passant_target.targeted_square())
         }
         else {
+            let enemy_pieces = self.black.all_pieces();
             let pawns = self.white.pawns;
-            (pawns << 7) & not_h_file
+            let attack_squares = (pawns << 7) & not_h_file;
+            attack_squares & (enemy_pieces | self.en_passant_target.targeted_square())
         }
     }
 
     fn pawn_east_attacks(&self) -> u64 {
         let not_a_file = 0x7F7F7F7F7F7F7F7Fu64;
         if self.active_player == Player::Black {
+            let enemy_pieces = self.white.all_pieces();
             let pawns = self.black.pawns;
-            (pawns >> 7) & not_a_file
+            let attack_squares = (pawns >> 7) & not_a_file;
+            attack_squares & (enemy_pieces | self.en_passant_target.targeted_square())
         }
         else {
+            let enemy_pieces = self.black.all_pieces();
             let pawns = self.white.pawns;
-            (pawns << 9) & not_a_file
+            let attack_squares = (pawns << 9) & not_a_file;
+            attack_squares & (enemy_pieces | self.en_passant_target.targeted_square())
         }
     }
 }
