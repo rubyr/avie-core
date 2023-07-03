@@ -91,4 +91,28 @@ impl BoardState {
             (pawns << 16) & (!enemy_pieces) & (!(enemy_pieces << 8))
         }
     }
+
+    fn pawn_west_attacks(&self) -> u64 {
+        let not_h_file = 0xFEFEFEFEFEFEFEFEu64;
+        if self.active_player == Player::Black {
+            let pawns = self.black.pawns;
+            (pawns >> 9) & not_h_file
+        }
+        else {
+            let pawns = self.white.pawns;
+            (pawns << 7) & not_h_file
+        }
+    }
+
+    fn pawn_east_attacks(&self) -> u64 {
+        let not_a_file = 0x7F7F7F7F7F7F7F7Fu64;
+        if self.active_player == Player::Black {
+            let pawns = self.black.pawns;
+            (pawns >> 7) & not_a_file
+        }
+        else {
+            let pawns = self.white.pawns;
+            (pawns << 9) & not_a_file
+        }
+    }
 }
