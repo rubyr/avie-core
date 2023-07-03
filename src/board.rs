@@ -62,32 +62,32 @@ pub struct BoardState {
 }
 
 impl BoardState {
-    
+
     fn all_pieces(&self) -> u64 {
         self.black.all_pieces() | self.white.all_pieces()
     }
-
+///Pawns are able to push forward when there is no piece blocking their way
     fn pawn_single_pushes(&self) -> u64 {
         if self.active_player == Player::Black {
             let pawns = self.black.pawns;
-            let enemy_pieces = self.white.all_pieces();
-            (pawns >> 8) & (!enemy_pieces)
+            let other_pieces = self.all_pieces() & !pawns;
+            (pawns >> 8) & (!other_pieces)
         }
         else {
             let pawns = self.white.pawns;
-            let enemy_pieces = self.black.all_pieces();
-            (pawns << 8) & (!enemy_pieces)
+            let other_pieces = self.all_pieces() & !pawns;
+            (pawns << 8) & (!other_pieces)
         }
     }
     fn pawn_double_pushes(&self) -> u64 {
         if self.active_player == Player::Black {
             let pawns = self.black.pawns & 0x00FF000000000000;
-            let enemy_pieces = self.white.all_pieces();
+            let enemy_pieces = self.all_pieces() & !pawns;
             (pawns >> 16) & (!enemy_pieces) & (!(enemy_pieces >> 8))
         }
         else {
             let pawns = self.white.pawns & 0x000000000000FF00;
-            let enemy_pieces = self.black.all_pieces();
+            let enemy_pieces = self.all_pieces() & !pawns;
             (pawns << 16) & (!enemy_pieces) & (!(enemy_pieces << 8))
         }
     }
