@@ -129,16 +129,7 @@ impl BoardState {
         let not_h_file = 0xFEFEFEFEFEFEFEFEu64;
         let player = if self.active_player == Player::Black {&self.black} else {&self.white};
         let king = player.king;
-        let other_pieces = self.all_pieces(); //can ignore removing king from board because it cannot move to the same square
+        let other_pieces = player.all_pieces(); //can ignore removing king from board because it cannot move to the same square
         (((king << 9 | king << 1 | king >> 7) & not_h_file) | king << 8 | ((king << 7  | king >> 1 | king >> 9) & not_a_file) |  king >> 8) & !other_pieces
-    }
-
-    fn king_attacks(&self) -> u64 {
-        let not_a_file = 0x7F7F7F7F7F7F7F7Fu64;
-        let not_h_file = 0xFEFEFEFEFEFEFEFEu64;
-        let (player, opponent) = if self.active_player == Player::Black {(&self.black, &self.white)} else {(&self.white, &self.black)};
-        let king = player.king;
-        let opponent_pieces = opponent.all_pieces();
-        (((king << 9 | king << 1 | king >> 7) & not_h_file) | king << 8 | ((king << 7  | king >> 1 | king >> 9) & not_a_file) |  king >> 8) & opponent_pieces
     }
 }
