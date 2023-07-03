@@ -123,4 +123,18 @@ impl BoardState {
             attack_squares & (enemy_pieces | self.en_passant_target.targeted_square())
         }
     }
+
+    fn king_moves(&self) -> u64 {
+        let player = if self.active_player == Player::Black {&self.black} else {&self.white};
+        let king = player.king;
+        let other_pieces = self.all_pieces(); //can ignore removing king from board because it cannot move to the same square
+        (king << 9 | king << 8 | king << 7 | king << 1 | king >> 1 | king >> 7 | king >> 8 | king >> 9) & !other_pieces
+    }
+
+    fn king_attacks(&self) -> u64 {
+        let (player, opponent) = if self.active_player == Player::Black {(&self.black, &self.white)} else {(&self.white, &self.black)};
+        let king = player.king;
+        let opponent_pieces = opponent.all_pieces();
+        (king << 9 | king << 8 | king << 7 | king << 1 | king >> 1 | king >> 7 | king >> 8 | king >> 9) & opponent_pieces
+    }
 }
