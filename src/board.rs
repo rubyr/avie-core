@@ -91,36 +91,25 @@ impl BoardState {
             (pawns << 16) & (!other_pieces) & (!(other_pieces << 8))
         }
     }
-
-    fn pawn_west_attacks(&self) -> u64 {
+///attacks are stored in an array [west_attacks, east_attacks]
+    fn pawn_attacks(&self) -> [u64;2] {
+        let not_a_file = 0x7F7F7F7F7F7F7F7Fu64;
         let not_h_file = 0xFEFEFEFEFEFEFEFEu64;
         if self.active_player == Player::Black {
             let enemy_pieces = self.white.all_pieces();
             let pawns = self.black.pawns;
-            let attack_squares = (pawns >> 9) & not_h_file;
-            attack_squares & (enemy_pieces | self.en_passant_target.targeted_square())
+            let west_attack_squares = (pawns >> 9) & not_h_file;
+            let east_attack_squares = (pawns >> 7) & not_a_file;
+            [west_attack_squares & (enemy_pieces | self.en_passant_target.targeted_square()),
+            east_attack_squares & (enemy_pieces | self.en_passant_target.targeted_square())]
         }
         else {
             let enemy_pieces = self.black.all_pieces();
             let pawns = self.white.pawns;
-            let attack_squares = (pawns << 7) & not_h_file;
-            attack_squares & (enemy_pieces | self.en_passant_target.targeted_square())
-        }
-    }
-
-    fn pawn_east_attacks(&self) -> u64 {
-        let not_a_file = 0x7F7F7F7F7F7F7F7Fu64;
-        if self.active_player == Player::Black {
-            let enemy_pieces = self.white.all_pieces();
-            let pawns = self.black.pawns;
-            let attack_squares = (pawns >> 7) & not_a_file;
-            attack_squares & (enemy_pieces | self.en_passant_target.targeted_square())
-        }
-        else {
-            let enemy_pieces = self.black.all_pieces();
-            let pawns = self.white.pawns;
-            let attack_squares = (pawns << 9) & not_a_file;
-            attack_squares & (enemy_pieces | self.en_passant_target.targeted_square())
+            let west_attack_squares = (pawns >> 7) & not_h_file;
+            let east_attack_squares = (pawns >> 9) & not_a_file;
+            [west_attack_squares & (enemy_pieces | self.en_passant_target.targeted_square()),
+            east_attack_squares & (enemy_pieces | self.en_passant_target.targeted_square())]
         }
     }
 
