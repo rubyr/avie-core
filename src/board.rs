@@ -100,6 +100,42 @@ mod test {
         let king_move = board.king_moves();
         assert_eq!(board.king_moves(), 0x0000000000000800);
     }
+
+    #[test]
+    fn knight_moves_empty_board() { 
+        let board =  BoardState {
+            white:PlayerState{king:0, queens: 0, rooks: 0, pawns: 0, bishops: 0, knights: 0x0000000800000000, queen_castle: false, king_castle: false},
+            black: PlayerState{king:0, queens: 0, rooks: 0, pawns: 0, bishops: 0, knights: 0, queen_castle: false, king_castle: false},
+            active_player: Player::White,
+            en_passant_target: EnPassantTarget(0x80),
+            full_counter: 1,
+            half_counter: 0
+        };
+        let all_moves = board.knight_moves().iter().fold(0, |x, y| x | y);
+        assert_eq!(all_moves, 0x0014220022140000);
+
+        let board =  BoardState {
+            white:PlayerState{king:0, queens: 0, rooks: 0, pawns: 0, bishops: 0, knights: 0x8000000000000000, queen_castle: false, king_castle: false},
+            black: PlayerState{king:0, queens: 0, rooks: 0, pawns: 0, bishops: 0, knights: 0, queen_castle: false, king_castle: false},
+            active_player: Player::White,
+            en_passant_target: EnPassantTarget(0x80),
+            full_counter: 1,
+            half_counter: 0
+        };
+        let all_moves = board.knight_moves().iter().fold(0, |x, y| x | y);
+        assert_eq!(all_moves, 0x0020400000000000);
+        let board =  BoardState {
+            white:PlayerState{king:0, queens: 0, rooks: 0, pawns: 0, bishops: 0, knights: 0x0100000000000000, queen_castle: false, king_castle: false},
+            black: PlayerState{king:0, queens: 0, rooks: 0, pawns: 0, bishops: 0, knights: 0, queen_castle: false, king_castle: false},
+            active_player: Player::White,
+            en_passant_target: EnPassantTarget(0x80),
+            full_counter: 1,
+            half_counter: 0
+        };
+        let all_moves = board.knight_moves().iter().fold(0, |x, y| x | y);
+        assert_eq!(all_moves, 0x0004020000000000);
+    }
+
     use crate::gamestate::*;
     #[test]
     fn boardstate_new() {
@@ -382,5 +418,30 @@ impl BoardState {
         let king = player.king;
         let other_pieces = player.all_pieces(); //can ignore removing king from board because it cannot move to the same square
         (((king << 9 | king << 1 | king >> 7) & not_h_file) | king << 8 | ((king << 7  | king >> 1 | king >> 9) & not_a_file) |  king >> 8) & !other_pieces
+    }
+///knight moves are stored in clockwise order, starting with North Northeast
+    fn knight_moves(&self) -> [u64;8] {
+        let (knights, friendly_pieces) = if self.active_player == Player::Black {
+            (self.black.knights, self.black.all_pieces())
+        }
+        else {
+            (self.white.knights, self.white.all_pieces())
+        };
+        let mut knight_moves = [0u64;8];
+        let not_a_file = 0x7F7F7F7F7F7F7F7Fu64;
+        let not_b_file = 0xBFBFBFBFBFBFBFBFu64;
+        let not_g_file = 0xFDFDFDFDFDFDFDFDu64;
+        let not_h_file = 0xFEFEFEFEFEFEFEFEu64;
+        let not_ab_file = not_a_file & not_b_file;
+        let not_gh_file = not_g_file & not_h_file;
+        knight_moves[0] = (knights << 17) & not_h_file & !friendly_pieces ;
+        knight_moves[1] = (knights << 10) & not_gh_file & !friendly_pieces;
+        knight_moves[2] = (knights >> 6) & not_gh_file & !friendly_pieces ;
+        knight_moves[3] = (knights >> 15) & not_h_file & !friendly_pieces ;
+        knight_moves[7] = (knights << 15) & not_a_file & !friendly_pieces ;
+        knight_moves[6] = (knights << 6) & not_ab_file & !friendly_pieces ;
+        knight_moves[5] = (knights >> 10) & not_ab_file & !friendly_pieces;
+        knight_moves[4] = (knights >> 17) & not_a_file & !friendly_pieces ;
+        knight_moves
     }
 }
