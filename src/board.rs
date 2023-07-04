@@ -1,199 +1,5 @@
 use crate::gamestate::{File, ParsedGameState, Player, Rank};
 
-mod precomputed {
-    fn generate_knight_moves() {
-        let mut moves = [0u64; 64];
-        for i in 0..64 {
-            let knights = 1 << i;
-            let mut moves = [0u64; 8];
-            let not_a_file = 0x7F7F7F7F7F7F7F7Fu64;
-            let not_b_file = 0xBFBFBFBFBFBFBFBFu64;
-            let not_g_file = 0xFDFDFDFDFDFDFDFDu64;
-            let not_h_file = 0xFEFEFEFEFEFEFEFEu64;
-            let not_ab_file = not_a_file & not_b_file;
-            let not_gh_file = not_g_file & not_h_file;
-            moves[0] = (knights << 17) & not_h_file;
-            moves[1] = (knights << 10) & not_gh_file;
-            moves[2] = (knights >> 6) & not_gh_file;
-            moves[3] = (knights >> 15) & not_h_file;
-            moves[7] = (knights << 15) & not_a_file;
-            moves[6] = (knights << 6) & not_ab_file;
-            moves[5] = (knights >> 10) & not_ab_file;
-            moves[4] = (knights >> 17) & not_a_file;
-            moves[i] = moves.iter().fold(0, |x, y| x | y);
-        }
-        print!("[");
-        let mut first = true;
-        for i in moves {
-            if first == true {
-                first = false;
-            } else {
-                print!(", ")
-            }
-            print!("0x{:016x}u64", i);
-        }
-        print!("]");
-    }
-    
-    fn generate_king_moves() {
-        let not_a_file = 0x7F7F7F7F7F7F7F7Fu64;
-        let not_h_file = 0xFEFEFEFEFEFEFEFEu64;
-        let mut moves = [0u64; 64];
-        for i in 0..64 {
-            let king = 1 << i;
-            moves[i] = ((king << 9 | king << 1 | king >> 7) & not_h_file)
-                | king << 8
-                | ((king << 7 | king >> 1 | king >> 9) & not_a_file)
-                | king >> 8;
-        }
-        print!("[");
-        let mut first = true;
-        for i in moves {
-            if first == true {
-                first = false;
-            } else {
-                print!(", ")
-            }
-            print!("0x{:016x}u64", i);
-        }
-        print!("]");
-    }
-
-    pub static knight_moves: [u64; 64] = [
-        0x0000000000020400u64,
-        0x0000000000050800u64,
-        0x00000000000a1100u64,
-        0x0000000000142200u64,
-        0x0000000000284400u64,
-        0x0000000000508800u64,
-        0x0000000000a01000u64,
-        0x0000000000402000u64,
-        0x0000000002040004u64,
-        0x0000000005080008u64,
-        0x000000000a110011u64,
-        0x0000000014220022u64,
-        0x0000000028440044u64,
-        0x0000000050880088u64,
-        0x00000000a0100010u64,
-        0x0000000040200020u64,
-        0x0000000204000402u64,
-        0x0000000508000805u64,
-        0x0000000a1100110au64,
-        0x0000001422002214u64,
-        0x0000002844004428u64,
-        0x0000005088008850u64,
-        0x000000a0100010a0u64,
-        0x0000004020002040u64,
-        0x0000020400040200u64,
-        0x0000050800080500u64,
-        0x00000a1100110a00u64,
-        0x0000142200221400u64,
-        0x0000284400442800u64,
-        0x0000508800885000u64,
-        0x0000a0100010a000u64,
-        0x0000402000204000u64,
-        0x0002040004020000u64,
-        0x0005080008050000u64,
-        0x000a1100110a0000u64,
-        0x0014220022140000u64,
-        0x0028440044280000u64,
-        0x0050880088500000u64,
-        0x00a0100010a00000u64,
-        0x0040200020400000u64,
-        0x0204000402000000u64,
-        0x0508000805000000u64,
-        0x0a1100110a000000u64,
-        0x1422002214000000u64,
-        0x2844004428000000u64,
-        0x5088008850000000u64,
-        0xa0100010a0000000u64,
-        0x4020002040000000u64,
-        0x0400040200000000u64,
-        0x0800080500000000u64,
-        0x1100110a00000000u64,
-        0x2200221400000000u64,
-        0x4400442800000000u64,
-        0x8800885000000000u64,
-        0x100010a000000000u64,
-        0x2000204000000000u64,
-        0x0004020000000000u64,
-        0x0008050000000000u64,
-        0x00110a0000000000u64,
-        0x0022140000000000u64,
-        0x0044280000000000u64,
-        0x0088500000000000u64,
-        0x0010a00000000000u64,
-        0x0020400000000000u64,
-    ];
-
-    pub static king_moves: [u64; 64] = [
-        0x0000000000000302u64,
-        0x0000000000000705u64,
-        0x0000000000000e0au64,
-        0x0000000000001c14u64,
-        0x0000000000003828u64,
-        0x0000000000007050u64,
-        0x000000000000e0a0u64,
-        0x000000000000c040u64,
-        0x0000000000030203u64,
-        0x0000000000070507u64,
-        0x00000000000e0a0eu64,
-        0x00000000001c141cu64,
-        0x0000000000382838u64,
-        0x0000000000705070u64,
-        0x0000000000e0a0e0u64,
-        0x0000000000c040c0u64,
-        0x0000000003020300u64,
-        0x0000000007050700u64,
-        0x000000000e0a0e00u64,
-        0x000000001c141c00u64,
-        0x0000000038283800u64,
-        0x0000000070507000u64,
-        0x00000000e0a0e000u64,
-        0x00000000c040c000u64,
-        0x0000000302030000u64,
-        0x0000000705070000u64,
-        0x0000000e0a0e0000u64,
-        0x0000001c141c0000u64,
-        0x0000003828380000u64,
-        0x0000007050700000u64,
-        0x000000e0a0e00000u64,
-        0x000000c040c00000u64,
-        0x0000030203000000u64,
-        0x0000070507000000u64,
-        0x00000e0a0e000000u64,
-        0x00001c141c000000u64,
-        0x0000382838000000u64,
-        0x0000705070000000u64,
-        0x0000e0a0e0000000u64,
-        0x0000c040c0000000u64,
-        0x0003020300000000u64,
-        0x0007050700000000u64,
-        0x000e0a0e00000000u64,
-        0x001c141c00000000u64,
-        0x0038283800000000u64,
-        0x0070507000000000u64,
-        0x00e0a0e000000000u64,
-        0x00c040c000000000u64,
-        0x0302030000000000u64,
-        0x0705070000000000u64,
-        0x0e0a0e0000000000u64,
-        0x1c141c0000000000u64,
-        0x3828380000000000u64,
-        0x7050700000000000u64,
-        0xe0a0e00000000000u64,
-        0xc040c00000000000u64,
-        0x0203000000000000u64,
-        0x0507000000000000u64,
-        0x0a0e000000000000u64,
-        0x141c000000000000u64,
-        0x2838000000000000u64,
-        0x5070000000000000u64,
-        0xa0e0000000000000u64,
-        0x40c0000000000000u64,
-    ];
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -288,7 +94,7 @@ mod test {
         //    println!("{:08b}", row);
         //}
     }
-    
+
     #[test]
     fn king_moves_bongcloud() {
         let board = BoardState {
@@ -660,7 +466,7 @@ impl BoardState {
         };
         let king = player.king.ilog2();
         let other_pieces = player.all_pieces();
-        precomputed::king_moves[king as usize] & !other_pieces
+        crate::precomputed::king_moves[king as usize] & !other_pieces
     }
     fn knight_moves(&self) -> Vec<u64> {
         let (knights, friendly_pieces) = if self.active_player == Player::Black {
@@ -673,7 +479,7 @@ impl BoardState {
         let mut new_knights = knights;
         while new_knights != 0  {
             new_knights = (knights >> index) - 1;
-            moves.push(precomputed::knight_moves[index] & !friendly_pieces);
+            moves.push(crate::precomputed::knight_moves[index] & !friendly_pieces);
             index += (new_knights.trailing_zeros()) as usize;
         }
         moves

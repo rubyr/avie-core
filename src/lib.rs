@@ -5,6 +5,7 @@ pub fn add(left: usize, right: usize) -> usize {
 mod gamestate;
 mod parse;
 mod board;
+mod precomputed;
 
 #[cfg(test)]
 mod tests {
