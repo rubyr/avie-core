@@ -466,7 +466,7 @@ impl BoardState {
         };
         let king = player.king.ilog2();
         let other_pieces = player.all_pieces();
-        crate::precomputed::king_moves[king as usize] & !other_pieces
+        crate::precomputed::KING_MOVES[king as usize] & !other_pieces
     }
     fn knight_moves(&self) -> Vec<u64> {
         let (knights, friendly_pieces) = if self.active_player == Player::Black {
@@ -479,8 +479,46 @@ impl BoardState {
         let mut new_knights = knights;
         while new_knights != 0  {
             new_knights = (knights >> index) - 1;
-            moves.push(crate::precomputed::knight_moves[index] & !friendly_pieces);
+            moves.push(crate::precomputed::KNIGHT_MOVES[index] & !friendly_pieces);
             index += (new_knights.trailing_zeros()) as usize;
+        }
+        moves
+    }
+    
+    fn bishop_moves(&self) -> Vec<u64> {
+        let (bishops, friendly_pieces) = if self.active_player == Player::Black {
+            (self.black.bishops, self.black.all_pieces())
+        }
+        else {
+            (self.white.bishops, self.white.all_pieces())
+        };
+        let mut moves: Vec<u64> = Vec::with_capacity(bishops.count_ones() as usize);
+        let mut index = (bishops.trailing_zeros()) as usize;
+        let mut new_bishops = bishops;
+        while new_bishops != 0 {
+            new_bishops = (bishops >> index) - 1;
+            let magic = crate::precomputed::bishop_magic::BISHOP_MAGICS[index];
+            let magic_index = crate::precomputed::magic_to_index(magic, self.all_pieces(), 9);
+            moves.push(crate::precomputed::bishop_magic::BISHOP_ATTACKS[index][magic_index]);
+        }
+        moves
+    }
+
+    fn rook_moves(&self) -> Vec<u64> {
+        let (rooks, friendly_pieces) = if self.active_player == Player::Black {
+            (self.black.rooks, self.black.all_pieces())
+        }
+        else {
+            (self.white.rooks, self.white.all_pieces())
+        };
+        let mut moves: Vec<u64> = Vec::with_capacity(rooks.count_ones() as usize);
+        let mut index = (rooks.trailing_zeros()) as usize;
+        let mut new_rooks = rooks;
+        while new_rooks != 0 {
+            new_rooks = (rooks >> index) - 1;
+            let magic = crate::precomputed::rook_magic::ROOK_MAGICS[index];
+            let magic_index = crate::precomputed::magic_to_index(magic, self.all_pieces(), 12);
+            moves.push(crate::precomputed::rook_magic::ROOK_ATTACKS[index][magic_index]);
         }
         moves
     }

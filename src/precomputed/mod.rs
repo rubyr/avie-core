@@ -1,5 +1,5 @@
-mod rook_magic;
-mod bishop_magic;
+pub mod rook_magic;
+pub mod bishop_magic;
 mod test {
     use std::io::Write;
     #[test]
@@ -218,7 +218,7 @@ mod test {
         for square in 0..64 {
             't: loop {
                 let magic = rand::random::<u64>() & rand::random::<u64>() & rand::random::<u64>();
-                let rook_mask = crate::precomputed::rook_mask[square as usize];
+                let rook_mask = crate::precomputed::ROOK_MASK[square as usize];
                 if let Ok(table) = generate_table(magic, rook_mask, bits, square, Piece::Rook) {
                     println!("index: {:?}", square);
 
@@ -228,33 +228,34 @@ mod test {
                 }
             }
         }
-        let mut string = format!("static rook_magics : [u64;64] = [");
-        let mut string2 = format!("static rook_attacks: [[u64;4096];64] = [");
+        let mut string = format!("pub static ROOK_MAGICS : [u64;64] = [");
+        let mut string2 = format!("pub static ROOK_ATTACKS: [[u64;{:?}];64] = [", 1<<bits);
+        let mut first = true;
         let mut first = true;
         for (magic, list) in array {
             if first == true {
                 first = false;
             }
             else {
-                string.push_str(", ");
-                string2.push_str(", ");
+                string.push_str(", \n");
+                string2.push_str(", \n");
             }
-            string.push_str(&mut format!("0x{:016X}", magic));
-            string2.push_str("[");
+            string.push_str(&mut format!("\t0x{:016X}", magic));
+            string2.push_str("\t[\n");
             let mut first_list = true;
             for i in list {
                 if first_list == true {
                     first_list = false;
                 }
                 else {
-                    string2.push_str(", ");
+                    string2.push_str(", \n");
                 }
-                string2.push_str(&mut format!("0x{:016X}", i));
+                string2.push_str(&mut format!("\t\t0x{:016X}", i));
             }
-            string2.push_str("]");
+            string2.push_str("\n\t]");
         };
-        string.push_str("];");
-        string2.push_str("];");
+        string.push_str("\n];\n");
+        string2.push_str("\n];");
         let mut file = std::fs::File::create("rook_magic.rs").unwrap();
         let _ = file.write_all(string.as_bytes());
         let _ = file.write_all(string2.as_bytes());
@@ -267,7 +268,7 @@ mod test {
         for square in 0..64 {
             't: loop {
                 let magic = rand::random::<u64>() & rand::random::<u64>() & rand::random::<u64>();
-                let bishop_mask = crate::precomputed::bishop_mask[square as usize];
+                let bishop_mask = crate::precomputed::BISHOP_MASK[square as usize];
                 if let Ok(table) = generate_table(magic, bishop_mask, bits, square, Piece::Bishop) {
                     println!("index: {:?}", square);
 
@@ -277,33 +278,33 @@ mod test {
                 }
             }
         }
-        let mut string = format!("static rook_magics : [u64;64] = [");
-        let mut string2 = format!("static rook_attacks: [[u64;512];64] = [");
+        let mut string = format!("pub static BISHOP_MAGICS : [u64;64] = [\n");
+        let mut string2 = format!("pub static BISHOP_ATTACKS: [[u64;512];64] = [\n");
         let mut first = true;
         for (magic, list) in array {
             if first == true {
                 first = false;
             }
             else {
-                string.push_str(", ");
-                string2.push_str(", ");
+                string.push_str(", \n");
+                string2.push_str(", \n");
             }
-            string.push_str(&mut format!("0x{:016X}", magic));
-            string2.push_str("[");
+            string.push_str(&mut format!("\t0x{:016X}", magic));
+            string2.push_str("\t[\n");
             let mut first_list = true;
             for i in list {
                 if first_list == true {
                     first_list = false;
                 }
                 else {
-                    string2.push_str(", ");
+                    string2.push_str(", \n");
                 }
-                string2.push_str(&mut format!("0x{:016X}", i));
+                string2.push_str(&mut format!("\t\t0x{:016X}", i));
             }
-            string2.push_str("]");
+            string2.push_str("\n\t]");
         };
-        string.push_str("];");
-        string2.push_str("];");
+        string.push_str("\n];\n");
+        string2.push_str("\n];");
         let mut file = std::fs::File::create("bishop_magic.rs").unwrap();
         let _ = file.write_all(string.as_bytes());
         let _ = file.write_all(string2.as_bytes());
@@ -344,11 +345,11 @@ mod test {
 }
 
 
-fn magic_to_index(magic: u64, permutation: u64, bits: u64) -> usize {
+pub fn magic_to_index(magic: u64, permutation: u64, bits: u64) -> usize {
     (permutation.wrapping_mul(magic) >> (64 - bits)) as usize
 }
 
-pub static knight_moves: [u64; 64] = [
+pub static KNIGHT_MOVES: [u64; 64] = [
     0x0000000000020400u64,
     0x0000000000050800u64,
     0x00000000000A1100u64,
@@ -414,7 +415,7 @@ pub static knight_moves: [u64; 64] = [
     0x0010A00000000000u64,
     0x0020400000000000u64,
 ];
-pub static king_moves: [u64; 64] = [
+pub static KING_MOVES: [u64; 64] = [
     0x0000000000000302u64,
     0x0000000000000705u64,
     0x0000000000000E0Au64,
@@ -481,7 +482,7 @@ pub static king_moves: [u64; 64] = [
     0x40C0000000000000u64,
 ];
 
-static rook_mask: [u64; 64] = [
+static ROOK_MASK: [u64; 64] = [
     0x000101010101017Eu64,
     0x000202020202027Cu64,
     0x000404040404047Au64,
@@ -548,7 +549,7 @@ static rook_mask: [u64; 64] = [
     0x7E80808080808000u64,
 ];
 
-static bishop_mask: [u64; 64] = [
+static BISHOP_MASK: [u64; 64] = [
     0x0040201008040200u64,
     0x0000402010080400u64,
     0x0000004020100A00u64,
