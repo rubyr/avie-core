@@ -484,7 +484,7 @@ impl BoardState {
         }
         moves
     }
-    
+
     fn bishop_moves(&self) -> Vec<u64> {
         let (bishops, friendly_pieces) = if self.active_player == Player::Black {
             (self.black.bishops, self.black.all_pieces())
@@ -499,7 +499,7 @@ impl BoardState {
             new_bishops = (bishops >> index) - 1;
             let magic = crate::precomputed::bishop_magic::BISHOP_MAGICS[index];
             let magic_index = crate::precomputed::magic_to_index(magic, self.all_pieces(), 9);
-            moves.push(crate::precomputed::bishop_magic::BISHOP_ATTACKS[index][magic_index]);
+            moves.push(crate::precomputed::bishop_magic::BISHOP_ATTACKS[index][magic_index] & !friendly_pieces);
         }
         moves
     }
@@ -518,7 +518,7 @@ impl BoardState {
             new_rooks = (rooks >> index) - 1;
             let magic = crate::precomputed::rook_magic::ROOK_MAGICS[index];
             let magic_index = crate::precomputed::magic_to_index(magic, self.all_pieces(), 12);
-            moves.push(crate::precomputed::rook_magic::ROOK_ATTACKS[index][magic_index]);
+            moves.push(crate::precomputed::rook_magic::ROOK_ATTACKS[index][magic_index] & !friendly_pieces);
         }
         moves
     }
