@@ -145,32 +145,32 @@ mod test {
                 let mut west_dir = 0;
                 let mut east_dir = 0;
                 'up: loop {
-                    up_dir += 1;
-                    valid_moves |= piece_square << (8 * up_dir);
                     if (piece_square << (8 * up_dir)) & !up_blocked == 0 {
                         break 'up;
                     }
+                    up_dir += 1;
+                    valid_moves |= piece_square << (8 * up_dir);
                 }
                 'down: loop {
-                    down_dir += 1;
-                    valid_moves |= piece_square >> (8 * down_dir);
                     if (piece_square >> (8 * down_dir)) & !down_blocked == 0 {
                         break 'down;
                     }
+                    down_dir += 1;
+                    valid_moves |= piece_square >> (8 * down_dir);
                 }
                 'west: loop {
-                    west_dir += 1;
-                    valid_moves |= piece_square << west_dir;
                     if (piece_square << west_dir) & !west_blocked == 0 {
                         break 'west;
                     }
+                    west_dir += 1;
+                    valid_moves |= piece_square << west_dir;
                 }
                 'east: loop {
-                    east_dir += 1;
-                    valid_moves |= piece_square >> east_dir;
                     if (piece_square >> east_dir) & !east_blocked == 0 {
                         break 'east;
                     }
+                    east_dir += 1;
+                    valid_moves |= piece_square >> east_dir;
                 }
             }
             else {
@@ -179,32 +179,32 @@ mod test {
                 let mut down_east_dir = 0;
                 let mut down_west_dir = 0;
                 'up_east: loop {
-                    up_east_dir += 1;
-                    valid_moves |= piece_square << (7 * up_east_dir);
                     if (piece_square << (7 * up_east_dir)) & !up_east_blocked == 0 {
                         break 'up_east;
                     }
+                    up_east_dir += 1;
+                    valid_moves |= piece_square << (7 * up_east_dir);
                 }
                 'up_west: loop {
-                    up_west_dir += 1;
-                    valid_moves |= piece_square << (9 * up_west_dir);
                     if (piece_square << (9 * up_west_dir)) & !up_west_blocked == 0 {
                         break 'up_west;
                     }
+                    up_west_dir += 1;
+                    valid_moves |= piece_square << (9 * up_west_dir);
                 }
                 'down_west: loop {
-                    down_west_dir += 1;
-                    valid_moves |= piece_square >> (7 * down_west_dir);
                     if (piece_square >> (7* down_west_dir)) & !down_west_blocked == 0 {
                         break 'down_west;
                     }
+                    down_west_dir += 1;
+                    valid_moves |= piece_square >> (7 * down_west_dir);
                 }
                 'down_east: loop {
-                    down_east_dir += 1;
-                    valid_moves |= piece_square >> (9 *down_east_dir);
                     if (piece_square >> (9 * down_east_dir)) & !down_east_blocked == 0 {
                         break 'down_east;
                     }
+                    down_east_dir += 1;
+                    valid_moves |= piece_square >> (9 *down_east_dir);
                 }
             }
             valid_moves
@@ -334,10 +334,10 @@ mod test {
         }
         let permutation_count: u64 = 1 << piece_mask.count_ones();
         let mut permutations = vec![0u64; permutation_count as usize];
-        for i in 0u64..permutation_count {
-            for j in 0u64..bits.len() as u64 {
-                let bit = (i >> j) & 1;
-                permutations[i as usize] |= bit << bits[j as usize];
+        for j in 0u64..permutation_count {
+            for k in 0u64..bits.len() as u64 {
+                let bit = (j >> k) & 1;
+                permutations[j as usize] |= bit << bits[k as usize];
             }
         }
         permutations
@@ -482,7 +482,7 @@ pub static KING_MOVES: [u64; 64] = [
     0x40C0000000000000u64,
 ];
 
-static ROOK_MASK: [u64; 64] = [
+pub static ROOK_MASK: [u64; 64] = [
     0x000101010101017Eu64,
     0x000202020202027Cu64,
     0x000404040404047Au64,
@@ -549,7 +549,7 @@ static ROOK_MASK: [u64; 64] = [
     0x7E80808080808000u64,
 ];
 
-static BISHOP_MASK: [u64; 64] = [
+pub static BISHOP_MASK: [u64; 64] = [
     0x0040201008040200u64,
     0x0000402010080400u64,
     0x0000004020100A00u64,

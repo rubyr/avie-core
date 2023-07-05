@@ -159,6 +159,49 @@ mod test {
         assert_eq!(knight_move, vec![0x0000142200221400u64, 0x0020400000000000u64]);
     }
 
+    #[test]
+    fn bishop_moves_empty_board() {
+        let mut board = BoardState {
+            white: PlayerState {
+                king: 0,
+                queens: 0,
+                rooks: 0,
+                pawns: 0,
+                bishops: 0,
+                knights: 0,
+                queen_castle: false,
+                king_castle: false,
+            },
+            black: PlayerState {
+                king: 0,
+                queens: 0,
+                rooks: 0,
+                pawns: 0,
+                bishops: 0,
+                knights: 0,
+                queen_castle: false,
+                king_castle: false,
+            },
+            active_player: Player::White,
+            en_passant_target: EnPassantTarget(0x80),
+            full_counter: 1,
+            half_counter: 0,
+        };
+        for i in 0..64 {
+            board.white.bishops = 1 << i;
+            let bishop_move = board.bishop_moves();
+            for move_ in bishop_move {
+                for i in 0..=7u8 {
+                    let row = (move_ >> (56 - (i * 8))) as u8;
+                    println!("{:08b}", row);
+                }
+                println!("");
+            }
+        }
+        
+        //assert_eq!(board.king_moves(), 0x0000000000000800);
+    }
+
     use crate::gamestate::*;
     #[test]
     fn boardstate_new() {
@@ -498,8 +541,10 @@ impl BoardState {
         while new_bishops != 0 {
             new_bishops = (bishops >> index) - 1;
             let magic = crate::precomputed::bishop_magic::BISHOP_MAGICS[index];
-            let magic_index = crate::precomputed::magic_to_index(magic, self.all_pieces(), 9);
+            let blockers = self.all_pieces() & crate::precomputed::BISHOP_MASK[index];
+            let magic_index = crate::precomputed::magic_to_index(magic, blockers, 9);
             moves.push(crate::precomputed::bishop_magic::BISHOP_ATTACKS[index][magic_index] & !friendly_pieces);
+            index += (new_bishops.trailing_zeros()) as usize;
         }
         moves
     }
@@ -517,8 +562,45 @@ impl BoardState {
         while new_rooks != 0 {
             new_rooks = (rooks >> index) - 1;
             let magic = crate::precomputed::rook_magic::ROOK_MAGICS[index];
-            let magic_index = crate::precomputed::magic_to_index(magic, self.all_pieces(), 12);
+            let blockers = self.all_pieces() & crate::precomputed::ROOK_MASK[index];
+            let magic_index = crate::precomputed::magic_to_index(magic, blockers, 12);
             moves.push(crate::precomputed::rook_magic::ROOK_ATTACKS[index][magic_index] & !friendly_pieces);
+            index += (new_rooks.trailing_zeros()) as usize;
+        }
+        moves
+    }
+
+    fn queen_moves(&self) -> Vec<u64> {
+        let (queens, friendly_pieces) = if self.active_player == Player::Black {
+            (self.black.queens, self.black.all_pieces())
+        }
+        else {
+            (self.white.queens, self.white.all_pieces())
+        };
+        let mut moves: Vec<u64> = Vec::with_capacity(queens.count_ones() as usize);
+        let mut index = (queens.trailing_zeros()) as usize;
+        let mut new_queens = queens;
+        while new_queens != 0 {
+            new_queens = (queens >> index) - 1;
+            let rook_blockers = self.all_pieces() & crate::precomputed::ROOK_MASK[index];
+            let rook_magic = crate::precomputed::rook_magic::ROOK_MAGICS[index];
+            let rook_magic_index = crate::precomputed::magic_to_index(rook_magic, rook_blockers, 12);
+            let bishop_blockers = self.all_pieces() & crate::precomputed::BISHOP_MASK[index];
+            let bishop_magic = crate::precomputed::bishop_magic::BISHOP_MAGICS[index];
+            let bishop_magic_index = crate::precomputed::magic_to_index(bishop_magic, bishop_blockers, 9);
+
+            for i in 0..=7u8 {
+                let row = (crate::precomputed::rook_magic::ROOK_ATTACKS[index][rook_magic_index] >> (56 - (i * 8))) as u8;
+                println!("{:08b}", row);
+            }
+            println!("");
+            for i in 0..=7u8 {
+                let row = (crate::precomputed::bishop_magic::BISHOP_ATTACKS[index][bishop_magic_index] >> (56 - (i * 8))) as u8;
+                println!("{:08b}", row);
+            }
+            println!("");
+            moves.push((crate::precomputed::rook_magic::ROOK_ATTACKS[index+1][rook_magic_index] | crate::precomputed::bishop_magic::BISHOP_ATTACKS[index][bishop_magic_index]) & !friendly_pieces);
+            index += (new_queens.trailing_zeros()) as usize;
         }
         moves
     }
