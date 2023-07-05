@@ -31,7 +31,7 @@ mod test {
             full_counter: 1,
             half_counter: 0,
         };
-        let king_move = board.king_moves();
+        let king_move = king_moves(board.white.king.ilog2() as usize, board.white.all_pieces());
         assert_eq!(king_move, 0x00001C141C000000);
         let board = BoardState {
             white: PlayerState {
@@ -59,7 +59,7 @@ mod test {
             full_counter: 1,
             half_counter: 0,
         };
-        let king_move = board.king_moves();
+        let king_move = king_moves(board.white.king.ilog2() as usize, board.white.all_pieces());
         assert_eq!(king_move, 0x0000030203000000);
         let board = BoardState {
             white: PlayerState {
@@ -87,7 +87,7 @@ mod test {
             full_counter: 1,
             half_counter: 0,
         };
-        let king_move = board.king_moves();
+        let king_move = king_moves(board.white.king.ilog2() as usize, board.white.all_pieces());
         assert_eq!(king_move, 0x0000C040C0000000);
         //for i in 0..=7u8 {
         //    let row = (king_move >> (56 - (i * 8))) as u8;
@@ -123,8 +123,8 @@ mod test {
             half_counter: 0,
             full_counter: 2,
         };
-        let king_move = board.king_moves();
-        assert_eq!(board.king_moves(), 0x0000000000000800);
+        let king_move = king_moves(board.white.king.ilog2() as usize, board.white.all_pieces());
+        assert_eq!(king_move, 0x0000000000000800);
     }
 
     #[test] 
@@ -155,8 +155,16 @@ mod test {
             full_counter: 1,
             half_counter: 0,
         };
-        let knight_move = board.knight_moves();
-        assert_eq!(knight_move, vec![0x0000142200221400u64, 0x0020400000000000u64]);
+        let mut new_knights = board.white.knights;
+        let mut index = new_knights.trailing_zeros();
+        let friendly_pieces = board.white.all_pieces();
+        let mut moves = vec![];
+        while index <= 63 && new_knights != 0 {
+            new_knights = (new_knights >> index) & !1;
+            moves.push(knight_moves(index as usize, friendly_pieces));
+            index += new_knights.trailing_zeros();
+        }
+        assert_eq!(moves, vec![0x0000142200221400u64, 0x0020400000000000u64]);
     }
 
     #[test]
@@ -187,16 +195,8 @@ mod test {
             half_counter: 0,
             full_counter: 2,
         };
-        let queen_move = board.queen_moves();
-        for move_ in queen_move {
-            for i in 0..=7u8 {
-                let row = (move_ >> (56 - (i * 8))) as u8;
-                println!("{:08b}", row);
-            }
-            println!("");
-        }
-        
-        //assert_eq!(board.king_moves(), 0x0000000000000800);
+        let queen_move = queen_moves(board.white.queens.ilog2() as usize, board.all_pieces(), board.white.all_pieces());
+        assert_eq!(queen_move, 0x0000000102040800);
     }
 
     use crate::gamestate::*;
@@ -450,144 +450,76 @@ impl BoardState {
     fn all_pieces(&self) -> u64 {
         self.black.all_pieces() | self.white.all_pieces()
     }
-    ///Pawns are able to push forward when there is no piece blocking their way
-    fn pawn_single_pushes(&self) -> u64 {
-        if self.active_player == Player::Black {
-            let pawns = self.black.pawns;
-            let other_pieces = self.all_pieces() & !pawns;
-            (pawns >> 8) & (!other_pieces)
-        } else {
-            let pawns = self.white.pawns;
-            let other_pieces = self.all_pieces() & !pawns;
-            (pawns << 8) & (!other_pieces)
-        }
-    }
-    fn pawn_double_pushes(&self) -> u64 {
-        if self.active_player == Player::Black {
-            let pawns = self.black.pawns & 0x00FF000000000000;
-            let other_pieces = self.all_pieces() & !pawns;
-            (pawns >> 16) & (!other_pieces) & (!(other_pieces >> 8))
-        } else {
-            let pawns = self.white.pawns & 0x000000000000FF00;
-            let other_pieces = self.all_pieces() & !pawns;
-            (pawns << 16) & (!other_pieces) & (!(other_pieces << 8))
-        }
-    }
-    ///attacks are stored in an array [west_attacks, east_attacks]
-    fn pawn_attacks(&self) -> [u64; 2] {
-        let not_a_file = 0x7F7F7F7F7F7F7F7Fu64;
-        let not_h_file = 0xFEFEFEFEFEFEFEFEu64;
-        if self.active_player == Player::Black {
-            let enemy_pieces = self.white.all_pieces();
-            let pawns = self.black.pawns;
-            let west_attack_squares = (pawns >> 9) & not_h_file;
-            let east_attack_squares = (pawns >> 7) & not_a_file;
-            [
-                west_attack_squares & (enemy_pieces | self.en_passant_target.targeted_square()),
-                east_attack_squares & (enemy_pieces | self.en_passant_target.targeted_square()),
-            ]
-        } else {
-            let enemy_pieces = self.black.all_pieces();
-            let pawns = self.white.pawns;
-            let west_attack_squares = (pawns >> 7) & not_h_file;
-            let east_attack_squares = (pawns >> 9) & not_a_file;
-            [
-                west_attack_squares & (enemy_pieces | self.en_passant_target.targeted_square()),
-                east_attack_squares & (enemy_pieces | self.en_passant_target.targeted_square()),
-            ]
-        }
-    }
+    
+}
 
-    fn king_moves(&self) -> u64 {
-        let player = if self.active_player == Player::Black {
-            &self.black
-        } else {
-            &self.white
-        };
-        let king = player.king.ilog2();
-        let other_pieces = player.all_pieces();
-        crate::precomputed::KING_MOVES[king as usize] & !other_pieces
+///Pawns are able to push forward when there is no piece blocking their way
+fn pawn_single_pushes(pawns: u64, other_pieces: u64, player: Player) -> u64 {
+    if player == Player::Black {
+        (pawns >> 8) & (!other_pieces)
     }
-    fn knight_moves(&self) -> Vec<u64> {
-        let (knights, friendly_pieces) = if self.active_player == Player::Black {
-            (self.black.knights, self.black.all_pieces())
-        } else {
-            (self.white.knights, self.white.all_pieces())
-        };
-        let mut moves: Vec<u64> = Vec::with_capacity(knights.count_ones() as usize);
-        let mut index: usize = (knights.trailing_zeros()) as usize;
-        let mut new_knights = knights;
-        while new_knights != 0  {
-            new_knights = (knights >> index) - 1;
-            moves.push(crate::precomputed::KNIGHT_MOVES[index] & !friendly_pieces);
-            index += (new_knights.trailing_zeros()) as usize;
+    else {
+        (pawns << 8) & (!other_pieces)
+    }
+}
+fn pawn_double_pushes(pawns: u64, other_pieces: u64) -> u64 {
+        if pawns & 0x00FF000000000000 != 0 {
+            let other_pieces = other_pieces & !pawns;
+            ((pawns & 0x00FF000000000000) >> 16) & (!other_pieces) & (!(other_pieces >> 8))
+        } else if pawns & 0x000000000000FF00 != 0 {
+            let other_pieces = other_pieces & !pawns;
+            ((pawns & 0x000000000000FF00) << 16) & (!other_pieces) & (!(other_pieces << 8))
         }
-        moves
+        else {0}
+}
+///attacks are stored in an array [west_attacks, east_attacks]
+fn pawn_attacks(pawns: u64, enemy_pieces: u64, en_passant_target: EnPassantTarget, player: Player) -> [u64; 2] {
+    let not_a_file = 0x7F7F7F7F7F7F7F7Fu64;
+    let not_h_file = 0xFEFEFEFEFEFEFEFEu64;
+    if player == Player::Black {
+        let west_attack_squares = (pawns >> 9) & not_h_file;
+        let east_attack_squares = (pawns >> 7) & not_a_file;
+        [
+            west_attack_squares & (enemy_pieces | en_passant_target.targeted_square()),
+            east_attack_squares & (enemy_pieces | en_passant_target.targeted_square()),
+        ]
+    } else {
+        let west_attack_squares = (pawns >> 7) & not_h_file;
+        let east_attack_squares = (pawns >> 9) & not_a_file;
+        [
+            west_attack_squares & (enemy_pieces | en_passant_target.targeted_square()),
+            east_attack_squares & (enemy_pieces | en_passant_target.targeted_square()),
+        ]
     }
+}
 
-    fn bishop_moves(&self) -> Vec<u64> {
-        let (bishops, friendly_pieces) = if self.active_player == Player::Black {
-            (self.black.bishops, self.black.all_pieces())
-        }
-        else {
-            (self.white.bishops, self.white.all_pieces())
-        };
-        let mut moves: Vec<u64> = Vec::with_capacity(bishops.count_ones() as usize);
-        let mut index = (bishops.trailing_zeros()) as usize;
-        let mut new_bishops = bishops;
-        while new_bishops != 0 {
-            new_bishops = (bishops >> index) - 1;
-            let magic = crate::precomputed::bishop_magic::BISHOP_MAGICS[index];
-            let blockers = self.all_pieces() & crate::precomputed::BISHOP_MASK[index];
-            let magic_index = crate::precomputed::magic_to_index(magic, blockers, 9);
-            moves.push(crate::precomputed::bishop_magic::BISHOP_ATTACKS[index][magic_index] & !friendly_pieces);
-            index += (new_bishops.trailing_zeros()) as usize;
-        }
-        moves
-    }
+fn king_moves(square: usize, friendly_pieces: u64 ) -> u64 {
+    crate::precomputed::KING_MOVES[square] & !friendly_pieces
+}
+fn knight_moves(square: usize, friendly_pieces: u64 ) -> u64 {
+    crate::precomputed::KNIGHT_MOVES[square] & !friendly_pieces
+}
 
-    fn rook_moves(&self) -> Vec<u64> {
-        let (rooks, friendly_pieces) = if self.active_player == Player::Black {
-            (self.black.rooks, self.black.all_pieces())
-        }
-        else {
-            (self.white.rooks, self.white.all_pieces())
-        };
-        let mut moves: Vec<u64> = Vec::with_capacity(rooks.count_ones() as usize);
-        let mut index = (rooks.trailing_zeros()) as usize;
-        let mut new_rooks = rooks;
-        while new_rooks != 0 {
-            new_rooks = (rooks >> index) - 1;
-            let magic = crate::precomputed::rook_magic::ROOK_MAGICS[index];
-            let blockers = self.all_pieces() & crate::precomputed::ROOK_MASK[index];
-            let magic_index = crate::precomputed::magic_to_index(magic, blockers, 12);
-            moves.push(crate::precomputed::rook_magic::ROOK_ATTACKS[index][magic_index] & !friendly_pieces);
-            index += (new_rooks.trailing_zeros()) as usize;
-        }
-        moves
-    }
+fn bishop_moves(square: usize, all_pieces: u64, friendly_pieces: u64) -> u64 {
+        let magic = crate::precomputed::bishop_magic::BISHOP_MAGICS[square];
+        let blockers = all_pieces & crate::precomputed::BISHOP_MASK[square];
+        let magic_index = crate::precomputed::magic_to_index(magic, blockers, 9);
+        crate::precomputed::bishop_magic::BISHOP_ATTACKS[square][magic_index] & !friendly_pieces
+}
 
-    fn queen_moves(&self) -> Vec<u64> {
-        let (queens, friendly_pieces) = if self.active_player == Player::Black {
-            (self.black.queens, self.black.all_pieces())
-        }
-        else {
-            (self.white.queens, self.white.all_pieces())
-        };
-        let mut moves: Vec<u64> = Vec::with_capacity(queens.count_ones() as usize);
-        let mut index = (queens.trailing_zeros()) as usize;
-        let mut new_queens = queens;
-        while new_queens != 0 {
-            new_queens = (queens >> index) - 1;
-            let rook_blockers = self.all_pieces() & crate::precomputed::ROOK_MASK[index];
-            let rook_magic = crate::precomputed::rook_magic::ROOK_MAGICS[index];
-            let rook_magic_index = crate::precomputed::magic_to_index(rook_magic, rook_blockers, 12);
-            let bishop_blockers = self.all_pieces() & crate::precomputed::BISHOP_MASK[index];
-            let bishop_magic = crate::precomputed::bishop_magic::BISHOP_MAGICS[index];
-            let bishop_magic_index = crate::precomputed::magic_to_index(bishop_magic, bishop_blockers, 9);
-            moves.push((crate::precomputed::rook_magic::ROOK_ATTACKS[index][rook_magic_index] | crate::precomputed::bishop_magic::BISHOP_ATTACKS[index][bishop_magic_index]) & !friendly_pieces);
-            index += (new_queens.trailing_zeros()) as usize;
-        }
-        moves
-    }
+fn rook_moves(square: usize, all_pieces: u64, friendly_pieces: u64) -> u64 {
+    let magic = crate::precomputed::rook_magic::ROOK_MAGICS[square];
+    let blockers = all_pieces & crate::precomputed::ROOK_MASK[square];
+    let magic_index = crate::precomputed::magic_to_index(magic, blockers, 12);
+    crate::precomputed::rook_magic::ROOK_ATTACKS[square][magic_index] & !friendly_pieces
+}
+
+fn queen_moves(square: usize, all_pieces: u64, friendly_pieces: u64) -> u64 {
+    let bishop_magic = crate::precomputed::bishop_magic::BISHOP_MAGICS[square];
+    let bishop_blockers = all_pieces & crate::precomputed::BISHOP_MASK[square];
+    let bishop_magic_index = crate::precomputed::magic_to_index(bishop_magic, bishop_blockers, 9);
+    let rook_magic = crate::precomputed::rook_magic::ROOK_MAGICS[square];
+    let rook_blockers = all_pieces & crate::precomputed::ROOK_MASK[square];
+    let rook_magic_index = crate::precomputed::magic_to_index(rook_magic, rook_blockers, 12);
+    (crate::precomputed::bishop_magic::BISHOP_ATTACKS[square][bishop_magic_index] | crate::precomputed::rook_magic::ROOK_ATTACKS[square][rook_magic_index]) & !friendly_pieces
 }
