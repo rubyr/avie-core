@@ -160,43 +160,40 @@ mod test {
     }
 
     #[test]
-    fn bishop_moves_empty_board() {
-        let mut board = BoardState {
-            white: PlayerState {
-                king: 0,
-                queens: 0,
-                rooks: 0,
-                pawns: 0,
-                bishops: 0,
-                knights: 0,
-                queen_castle: false,
-                king_castle: false,
-            },
+    fn queen_moves_empty_board() {
+        let board = BoardState {
             black: PlayerState {
-                king: 0,
-                queens: 0,
-                rooks: 0,
-                pawns: 0,
-                bishops: 0,
-                knights: 0,
-                queen_castle: false,
-                king_castle: false,
+                king: 0x0800000000000000,
+                queens: 0x1000000000000000,
+                bishops: 0x2400000000000000,
+                knights: 0x4200000000000000,
+                rooks: 0x8100000000000000,
+                pawns: 0x00F7080000000000,
+                king_castle: true,
+                queen_castle: true,
+            },
+            white: PlayerState {
+                king: 0x08,
+                queens: 0x10,
+                bishops: 0x24,
+                knights: 0x42,
+                rooks: 0x81,
+                pawns: 0x0800F700,
+                king_castle: true,
+                queen_castle: true,
             },
             active_player: Player::White,
-            en_passant_target: EnPassantTarget(0x80),
-            full_counter: 1,
+            en_passant_target: EnPassantTarget(0x13),
             half_counter: 0,
+            full_counter: 2,
         };
-        for i in 0..64 {
-            board.white.bishops = 1 << i;
-            let bishop_move = board.bishop_moves();
-            for move_ in bishop_move {
-                for i in 0..=7u8 {
-                    let row = (move_ >> (56 - (i * 8))) as u8;
-                    println!("{:08b}", row);
-                }
-                println!("");
+        let queen_move = board.queen_moves();
+        for move_ in queen_move {
+            for i in 0..=7u8 {
+                let row = (move_ >> (56 - (i * 8))) as u8;
+                println!("{:08b}", row);
             }
+            println!("");
         }
         
         //assert_eq!(board.king_moves(), 0x0000000000000800);
@@ -588,18 +585,7 @@ impl BoardState {
             let bishop_blockers = self.all_pieces() & crate::precomputed::BISHOP_MASK[index];
             let bishop_magic = crate::precomputed::bishop_magic::BISHOP_MAGICS[index];
             let bishop_magic_index = crate::precomputed::magic_to_index(bishop_magic, bishop_blockers, 9);
-
-            for i in 0..=7u8 {
-                let row = (crate::precomputed::rook_magic::ROOK_ATTACKS[index][rook_magic_index] >> (56 - (i * 8))) as u8;
-                println!("{:08b}", row);
-            }
-            println!("");
-            for i in 0..=7u8 {
-                let row = (crate::precomputed::bishop_magic::BISHOP_ATTACKS[index][bishop_magic_index] >> (56 - (i * 8))) as u8;
-                println!("{:08b}", row);
-            }
-            println!("");
-            moves.push((crate::precomputed::rook_magic::ROOK_ATTACKS[index+1][rook_magic_index] | crate::precomputed::bishop_magic::BISHOP_ATTACKS[index][bishop_magic_index]) & !friendly_pieces);
+            moves.push((crate::precomputed::rook_magic::ROOK_ATTACKS[index][rook_magic_index] | crate::precomputed::bishop_magic::BISHOP_ATTACKS[index][bishop_magic_index]) & !friendly_pieces);
             index += (new_queens.trailing_zeros()) as usize;
         }
         moves
