@@ -305,6 +305,33 @@ mod test {
             }
         );
     }
+
+    #[test]
+    fn king_rook_pins() {
+        let king = 0x0000000008000000u64;
+        let rooks = 0x0800000081000000u64;
+        let enemy = 0x08000000C1000000u64;
+        let friendly = 0x000800001C000000u64;
+        let result = king_pins_rook(king.ilog2() as usize, friendly, enemy | friendly, rooks);
+        assert_eq!(result, 0x0008000004000000);
+    }
+    /// 10000000
+    /// 00000001
+    /// 00000010
+    /// 00010100
+    /// 00001000
+    /// 00000000
+    /// 00000000
+    /// 00000000
+    #[test]
+    fn king_bishop_pins() {
+        let king = 0x0000000008000000u64;
+        let bishops = 0x8001000000000001u64;
+        let enemy = 0x8001020000000001u64;
+        let friendly = 0x0000001408000200u64;
+        let result = king_pins_bishop(king.ilog2() as usize, friendly, enemy | friendly, bishops);
+        assert_eq!(result, 0x0000001000000200);
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -493,10 +520,59 @@ fn pawn_attacks(pawns: u64, enemy_pieces: u64, en_passant_target: EnPassantTarge
     }
 }
 
-fn king_moves(square: usize, friendly_pieces: u64 ) -> u64 {
+fn king_moves(square: usize, friendly_pieces: u64) -> u64 {
     crate::precomputed::KING_MOVES[square] & !friendly_pieces
 }
-fn knight_moves(square: usize, friendly_pieces: u64 ) -> u64 {
+
+fn king_moves_legal(square: usize, friendly_pieces: u64, enemy_attacks: u64) -> u64 {
+    let moves = king_moves(square, friendly_pieces);
+    moves & !enemy_attacks
+}
+
+///returns a bitboard of all friendly pieces that are pinned to the king.
+fn king_pins_rook(king: usize, friendly_pieces: u64, all_pieces: u64, rooks_and_queens: u64) -> u64 {
+    let mut new_rooks_and_queens = rooks_and_queens;
+    let mut index = rooks_and_queens.trailing_zeros();
+    let king_moves = rook_moves(king, rooks_and_queens, 0);
+    let mut pinned_pieces = 0;
+    while index <= 63 && new_rooks_and_queens != 0 {
+            new_rooks_and_queens = (rooks_and_queens >> index) & !1;
+            let moves = rook_moves(index as usize, 1 << king, 0);
+            if (moves & king_moves).count_ones() > 1 {
+                let mask = moves & king_moves;
+                let masked_pieces = (all_pieces & !(1 << king) as u64) & mask;
+                if masked_pieces.count_ones() == 1 && (masked_pieces & friendly_pieces).count_ones() == 1 {
+                    pinned_pieces |= masked_pieces;
+                }
+            }
+            index += new_rooks_and_queens.trailing_zeros();
+    };
+    pinned_pieces
+}
+
+
+///returns a bitboard of all friendly pieces that are pinned to the king.
+fn king_pins_bishop(king: usize, friendly_pieces: u64, all_pieces: u64, bishops_and_queens: u64) -> u64 {
+    let mut new_bishops_and_queens = bishops_and_queens;
+    let mut index = bishops_and_queens.trailing_zeros();
+    let king_moves = bishop_moves(king, bishops_and_queens, 0);
+    let mut pinned_pieces = 0;
+    while index <= 63 && new_bishops_and_queens != 0 {
+            new_bishops_and_queens = (bishops_and_queens >> index) & !1;
+            let moves = bishop_moves(index as usize, 1 << king, 0);
+            if (moves & king_moves).count_ones() > 1 {
+                let mask = moves & king_moves;
+                let masked_pieces = (all_pieces & !(1 << king) as u64) & mask;
+                if masked_pieces.count_ones() == 1 && (masked_pieces & friendly_pieces).count_ones() == 1 {
+                    pinned_pieces |= masked_pieces;
+                }
+            }
+            index += new_bishops_and_queens.trailing_zeros();
+    };
+    pinned_pieces
+}
+
+fn knight_moves(square: usize, friendly_pieces: u64) -> u64 {
     crate::precomputed::KNIGHT_MOVES[square] & !friendly_pieces
 }
 
