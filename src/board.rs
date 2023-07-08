@@ -615,14 +615,32 @@ impl BoardState {
             }
             insert_moves(queen, moves, move_list, &mut move_index);
         }
-        //does not properly handle checks from en passant moves, will fix later
         for pawn in indices_from_bitboard(player.pawns) {
-            let attacks = pawn_attacks(
+            let mut attacks = pawn_attacks(
                 1 << pawn,
                 opponent.all_pieces(),
                 self.en_passant_target.clone(),
                 self.active_player,
             );
+            if attacks[0] & self.en_passant_target.targeted_square() != 0 {
+                if king_attacked_rooks(
+                    king_square,
+                    all_pieces & !(1 << pawn | 1 << (pawn + 1)),
+                    opponent.rooks | opponent.queens,
+                ) != 0
+                {
+                    attacks[0] &= !(self.en_passant_target.targeted_square());
+                }
+            } else if attacks[1] & self.en_passant_target.targeted_square() != 0 {
+                if king_attacked_rooks(
+                    king_square,
+                    all_pieces & !(1 << pawn | 1 << (pawn - 1)),
+                    opponent.rooks | opponent.queens,
+                ) != 0
+                {
+                    attacks[1] &= !(self.en_passant_target.targeted_square());
+                }
+            }
             let mut moves = pawn_single_pushes(1 << pawn, all_pieces, self.active_player)
                 | pawn_double_pushes(1 << pawn, all_pieces)
                 | attacks[0]
@@ -739,7 +757,7 @@ fn pawn_double_pushes(pawns: u64, other_pieces: u64) -> u64 {
         0
     }
 }
-///attacks are stored in an array [west_attacks, east_attacks]
+///attacks are stored in an array [west_attacks, east_attacks] from white's perspective
 fn pawn_attacks(
     pawns: u64,
     enemy_pieces: u64,
