@@ -1,5 +1,4 @@
 use crate::gamestate::{File, ParsedGameState, Player, Rank};
-use std::collections::HashMap;
 
 #[cfg(test)]
 mod test {
@@ -351,7 +350,7 @@ mod test {
         let mut move_array = [Move {
             from: 0,
             to: 0,
-            promotion: 0,
+            promotion: Promotion::None,
         }; 218];
         let board = BoardState {
             black: PlayerState {
@@ -522,15 +521,25 @@ fn player_from_gamestate(player: Player, gamestate: &ParsedGameState) -> PlayerS
     }
 }
 
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Promotion {
+    None,
+    Knight,
+    Bishop,
+    Rook,
+    Queen
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct Move {
     from: u8,
     to: u8,
-    promotion: u8, //0: no promotion, 1: knight, 2: bishop, 3: rook, 4: queen
+    promotion: Promotion, //0: no promotion, 1: knight, 2: bishop, 3: rook, 4: queen
 }
 
 impl Move {
-    fn new(from: u8, to: u8, promotion: u8) -> Move {
+    fn new(from: u8, to: u8, promotion: Promotion) -> Move {
         Move {
             from,
             to,
@@ -714,12 +723,11 @@ impl BoardState {
                 //0: no promotion, 1: knight, 2: bishop, 3: rook, 4: queen
                 player.pawns &= !(1 << to_move.from);
                 match to_move.promotion {
-                0 => player.pawns |= 1 << to_move.to,
-                1 => player.knights |= 1 << to_move.to,
-                2 => player.bishops |= 1 << to_move.to,
-                3 => player.rooks |= 1 << to_move.to,
-                4 => player.queens |= 1 << to_move.to,
-                _ => unreachable!()
+                Promotion::None => player.pawns |= 1 << to_move.to,
+                Promotion::Knight => player.knights |= 1 << to_move.to,
+                Promotion::Bishop => player.bishops |= 1 << to_move.to,
+                Promotion::Rook => player.rooks |= 1 << to_move.to,
+                Promotion::Queen => player.queens |= 1 << to_move.to,
                 }
                 self.half_counter = 0;
             }
@@ -842,10 +850,10 @@ impl BoardState {
             PieceType::Rook(_) => {
                 player.rooks &= !(1 << last_move.to);
                 match last_move.promotion {
-                    0 => player.rooks |= 1 << last_move.from,
-                    3 => player.pawns |= 1 << last_move.from,
+                    Promotion::None => player.rooks |= 1 << last_move.from,
+                    Promotion::Rook => player.pawns |= 1 << last_move.from,
                     x => {
-                        println!("{}",x);
+                        println!("{:?}",x);
                         unreachable!()
                     }
                 }
@@ -853,10 +861,10 @@ impl BoardState {
             PieceType::Bishop(_) => {
                 player.bishops &= !(1 << last_move.to);
                 match last_move.promotion {
-                    0 => player.bishops |= 1 << last_move.from,
-                    2 => player.pawns |= 1 << last_move.from,
+                    Promotion::None => player.bishops |= 1 << last_move.from,
+                    Promotion::Bishop => player.pawns |= 1 << last_move.from,
                     x => {
-                        println!("{}",x);
+                        println!("{:?}",x);
                         unreachable!()
                     }
                 }
@@ -864,10 +872,10 @@ impl BoardState {
             PieceType::Knight(_) => {
                 player.knights &= !(1 << last_move.to);
                 match last_move.promotion {
-                    0 => player.knights |= 1 << last_move.from,
-                    1 => player.pawns |= 1 << last_move.from,
+                    Promotion::None => player.knights |= 1 << last_move.from,
+                    Promotion::Knight => player.pawns |= 1 << last_move.from,
                     x => {
-                        println!("{}",x);
+                        println!("{:?}",x);
                         unreachable!()
                     }
                 }
@@ -876,10 +884,10 @@ impl BoardState {
                 //0: no promotion, 1: knight, 2: bishop, 3: rook, 4: queen
                 player.queens &= !(1 << last_move.to);
                 match last_move.promotion {
-                    0 => player.queens |= 1 << last_move.from,
-                    4 => player.pawns |= 1 << last_move.from,
+                    Promotion::None => player.queens |= 1 << last_move.from,
+                    Promotion::Queen => player.pawns |= 1 << last_move.from,
                     x => {
-                        println!("{}",x);
+                        println!("{:?}",x);
                         unreachable!()
                     }
                 }
@@ -1136,36 +1144,36 @@ impl BoardState {
                     }
                     != 0
                 {
-                    move_list[move_index] = Move {
-                        from: pawn,
-                        to: move_,
-                        promotion: 1,
-                    };
+                    move_list[move_index] = Move::new(
+                        pawn,
+                        move_,
+                        Promotion::Knight,
+                    );
                     move_index += 1;
-                    move_list[move_index] = Move {
-                        from: pawn,
-                        to: move_,
-                        promotion: 2,
-                    };
+                    move_list[move_index] = Move::new(
+                        pawn,
+                        move_,
+                        Promotion::Bishop,
+                    );
                     move_index += 1;
-                    move_list[move_index] = Move {
-                        from: pawn,
-                        to: move_,
-                        promotion: 3,
-                    };
+                    move_list[move_index] = Move::new(
+                        pawn,
+                        move_,
+                        Promotion::Rook,
+                    );
                     move_index += 1;
-                    move_list[move_index] = Move {
-                        from: pawn,
-                        to: move_,
-                        promotion: 4,
-                    };
+                    move_list[move_index] = Move::new(
+                        pawn,
+                        move_,
+                        Promotion::Queen,
+                    );
                     move_index += 1;
                 } else {
-                    move_list[move_index] = Move {
-                        from: pawn,
-                        to: move_,
-                        promotion: 0,
-                    };
+                    move_list[move_index] = Move::new(
+                        pawn,
+                        move_,
+                        Promotion::None,
+                    );;
                     move_index += 1;
                 }
             }
@@ -1284,7 +1292,7 @@ fn insert_moves(piece: u8, moves: u64, move_list: &mut [Move; 218], move_index: 
         move_list[*move_index] = Move {
             from: piece,
             to: move_,
-            promotion: 0,
+            promotion: Promotion::None,
         };
         *move_index += 1;
     }
@@ -1630,10 +1638,10 @@ fn move_to_algebraic(move_: &Move, board: &BoardState) -> String {
             file = FILES[move_.from as usize % 8];
         }
         promotion = match move_.promotion {
-            1 => "=n",
-            2 => "=b",
-            3 => "=r",
-            4 => "=q",
+            Promotion::Knight => "=n",
+            Promotion::Bishop => "=b",
+            Promotion::Rook => "=r",
+            Promotion::Queen => "=q",
             _ => "",
         };
         ""
@@ -1751,10 +1759,10 @@ fn move_to_algebraic(move_: &Move, board: &BoardState) -> String {
             file = FILES[move_.from as usize % 8];
         }
         promotion = match move_.promotion {
-            1 => "=N",
-            2 => "=B",
-            3 => "=R",
-            4 => "=Q",
+            Promotion::Knight => "=N",
+            Promotion::Bishop => "=B",
+            Promotion::Rook => "=R",
+            Promotion::Queen => "=Q",
             _ => "",
         };
         ""
@@ -1796,7 +1804,7 @@ fn perft(board: &mut BoardState, depth: u8) -> u64 {
     let mut move_array = [Move {
         from: 0,
         to: 0,
-        promotion: 0,
+        promotion: Promotion::None,
     }; 218];
     let moves = board.generate_moves(&mut move_array);
     if depth == 1 {
@@ -1815,7 +1823,7 @@ fn perft_first_level(board: &mut BoardState, depth: u8) -> u64 {
     let mut move_array = [Move {
         from: 0,
         to: 0,
-        promotion: 0,
+        promotion: Promotion::None,
     }; 218];
     let moves = board.generate_moves(&mut move_array);
     if depth == 1 {
