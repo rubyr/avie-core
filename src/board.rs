@@ -391,7 +391,7 @@ mod test {
         let parsed_state =
             fen_to_game("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10").unwrap();
         let mut board = BoardState::new(parsed_state);
-        let first_3_ply_moves = perft_first_level(&mut board, 6);
+        let first_3_ply_moves = perft_div(&mut board, 4);
         println!("{:?}", first_3_ply_moves);
     }
 }
@@ -573,7 +573,7 @@ enum PieceType {
 }
 
 impl BoardState {
-    fn new(game: ParsedGameState) -> Self {
+    pub fn new(game: ParsedGameState) -> Self {
         let black = player_from_gamestate(Player::Black, &game);
         let white = player_from_gamestate(Player::White, &game);
         let en_passant_target = en_passant_target(&game.en_passant_target);
@@ -1788,15 +1788,7 @@ fn moves_to_algebraic(moves: &[Move], board: &BoardState) -> Vec<String> {
 }
 
 fn queen_moves(square: usize, all_pieces: u64, friendly_pieces: u64) -> u64 {
-    let bishop_magic = crate::precomputed::bishop_magic::BISHOP_MAGICS[square];
-    let bishop_blockers = all_pieces & crate::precomputed::BISHOP_MASK[square];
-    let bishop_magic_index = crate::precomputed::magic_to_index(bishop_magic, bishop_blockers, 9);
-    let rook_magic = crate::precomputed::rook_magic::ROOK_MAGICS[square];
-    let rook_blockers = all_pieces & crate::precomputed::ROOK_MASK[square];
-    let rook_magic_index = crate::precomputed::magic_to_index(rook_magic, rook_blockers, 12);
-    (crate::precomputed::bishop_magic::BISHOP_ATTACKS[square][bishop_magic_index]
-        | crate::precomputed::rook_magic::ROOK_ATTACKS[square][rook_magic_index])
-        & !friendly_pieces
+    bishop_moves(square, all_pieces, friendly_pieces) | rook_moves(square, all_pieces, friendly_pieces)
 }
 
 fn perft(board: &mut BoardState, depth: u8) -> u64 {
@@ -1818,7 +1810,7 @@ fn perft(board: &mut BoardState, depth: u8) -> u64 {
     move_count
 }
 
-fn perft_first_level(board: &mut BoardState, depth: u8) -> u64 {
+pub fn perft_div(board: &mut BoardState, depth: u8) -> u64 {
     let mut move_count = 0;
     let mut move_array = [Move {
         from: 0,
