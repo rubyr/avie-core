@@ -820,7 +820,7 @@ impl BoardState {
 
         let (last_move, move_data) = self.move_stack.pop().unwrap();
         let temp = Move::new(last_move.to, last_move.from, last_move.promotion);
-        let move_str = move_to_algebraic(&temp, &self);
+        //let move_str = move_to_algebraic(&temp, &self);
         self.active_player = match self.active_player {
             Player::Black => {
                 self.full_counter -= 1;
@@ -916,7 +916,7 @@ impl BoardState {
                         let row = (old_king >> (56 - (i * 8))) as u8;
                         println!("{:08b}", row);
                     }
-                    println!("move string: {:?}", move_str);
+                    //println!("move string: {:?}", move_str);
                     println!("move struct: {:?}", last_move);
                     println!("{:?}", self.move_stack);
                     panic!();
