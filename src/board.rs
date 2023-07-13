@@ -1044,7 +1044,7 @@ impl BoardState {
             all_pieces,
             opponent.rooks | opponent.queens,
         );
-        for rook in indices_from_bitboard(player.rooks) {
+        for rook in BitboardIterator::new(player.rooks) {
             let mut moves = rook_moves(rook as usize, all_pieces, player.all_pieces())
                 & (capture_mask | push_mask);
             if 1 << rook & pinned_pieces != 0 {
@@ -1057,7 +1057,7 @@ impl BoardState {
             }
             insert_moves(rook, moves, move_list, &mut move_index);
         }
-        for bishop in indices_from_bitboard(player.bishops) {
+        for bishop in BitboardIterator::new(player.bishops) {
             let mut moves = bishop_moves(bishop as usize, all_pieces, player.all_pieces())
                 & (capture_mask | push_mask);
             if 1 << bishop & pinned_pieces != 0 {
@@ -1070,14 +1070,14 @@ impl BoardState {
             }
             insert_moves(bishop, moves, move_list, &mut move_index);
         }
-        for knight in indices_from_bitboard(player.knights) {
+        for knight in BitboardIterator::new(player.knights) {
             let moves =
                 knight_moves(knight as usize, player.all_pieces()) & (capture_mask | push_mask);
             if 1 << knight & pinned_pieces == 0 {
                 insert_moves(knight, moves, move_list, &mut move_index);
             }
         }
-        for queen in indices_from_bitboard(player.queens) {
+        for queen in BitboardIterator::new(player.queens) {
             let mut moves = queen_moves(queen as usize, all_pieces, player.all_pieces())
                 & (capture_mask | push_mask);
             if 1 << queen & pinned_pieces != 0 {
@@ -1090,7 +1090,7 @@ impl BoardState {
             }
             insert_moves(queen, moves, move_list, &mut move_index);
         }
-        for pawn in indices_from_bitboard(player.pawns) {
+        for pawn in BitboardIterator::new(player.pawns) {
             let mut attacks = pawn_attacks(
                 1 << pawn,
                 opponent.all_pieces(),
@@ -1132,7 +1132,7 @@ impl BoardState {
                     moves &= rook_moves(king_square, 0, 0) & rook_moves(pawn as usize, 0, 0)
                 }
             }
-            let move_squares = indices_from_bitboard(moves);
+            let move_squares = BitboardIterator::new(moves);
             for move_ in move_squares {
                 if (1u64 << move_)
                     & if self.active_player == Player::Black {
@@ -1204,19 +1204,21 @@ impl BoardState {
 
 struct BitboardIterator(u64);
 
-    impl Iterator for BitboardIterator {
-        type Item = u8;
-
-        fn next(&mut self) -> Option<Self::Item> {
-            if self.0.count_ones() == 0 {return None}
-            let result = self.0.trailing_zeros() as u8;
-            self.0 >>= result;
-            Some(result)
-        }
+impl BitboardIterator {
+    #[inline]
+    fn new(board: u64) -> Self {
+        Self(board)
     }
+}
 
-fn indices_from_bitboard(board: u64) -> BitboardIterator {
-    BitboardIterator(board)
+impl Iterator for BitboardIterator {
+    type Item = u8;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.0.count_ones() == 0 {return None}
+        let result = self.0.trailing_zeros() as u8;
+        self.0 &= !(1 << result);
+        Some(result)
+    }
 }
 
 fn find_opponent_attacked_squares(
@@ -1236,13 +1238,13 @@ fn find_opponent_attacked_squares(
         },
     );
     let mut attacked_squares = 0;
-    attacked_squares |= indices_from_bitboard(opponent.rooks)
+    attacked_squares |= BitboardIterator::new(opponent.rooks)
         .fold(0, |x, y| x | rook_moves(y as usize, all_pieces, 0));
-    attacked_squares |= indices_from_bitboard(opponent.bishops)
+    attacked_squares |= BitboardIterator::new(opponent.bishops)
         .fold(0, |x, y| x | bishop_moves(y as usize, all_pieces, 0));
-    attacked_squares |= indices_from_bitboard(opponent.queens)
+    attacked_squares |= BitboardIterator::new(opponent.queens)
         .fold(0, |x, y| x | queen_moves(y as usize, all_pieces, 0));
-    attacked_squares |= indices_from_bitboard(opponent.knights)
+    attacked_squares |= BitboardIterator::new(opponent.knights)
         .fold(0, |x, y| x | knight_moves(y as usize, 0));
     attacked_squares |= king_moves(opponent.king.ilog2() as usize, 0);
     attacked_squares |= pawn_attacked_squares[0] | pawn_attacked_squares[1];
@@ -1286,7 +1288,7 @@ fn pieces_checked_by(
 }
 
 fn insert_moves(piece: u8, moves: u64, move_list: &mut [Move; 218], move_index: &mut usize) {
-    let move_squares = indices_from_bitboard(moves);
+    let move_squares = BitboardIterator::new(moves);
     for move_ in move_squares {
         move_list[*move_index] = Move {
             from: piece,
