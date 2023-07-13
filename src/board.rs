@@ -381,7 +381,7 @@ mod test {
         };
         let moves = board.generate_moves(&mut move_array);
         let x = moves.len();
-        dbg!(moves_to_algebraic(moves, &board));
+        dbg!(moves.iter().map(|move_| move_to_algebraic(move_, &board)).collect::<Vec<_>>());
         assert_eq!(x, 20);
     }
 
@@ -668,10 +668,10 @@ impl BoardState {
         } else {
             if captured_piece.is_some() {
                 match captured_piece.unwrap() {
-                    PieceType::Pawn(player) => {
+                    PieceType::Pawn(_) => {
                         move_data.capture = CapturedPiece::Pawn(to_move.to);
                     }
-                    PieceType::Rook(player) => {
+                    PieceType::Rook(_) => {
                         move_data.capture = CapturedPiece::Rook(to_move.to);
                         if opponent.king_castle && opponent.king.ilog2() as u8 > to_move.to {
                             opponent.king_castle = false;
@@ -680,16 +680,16 @@ impl BoardState {
                             opponent.queen_castle = false;
                         }
                     }
-                    PieceType::Bishop(player) => {
+                    PieceType::Bishop(_) => {
                         move_data.capture = CapturedPiece::Bishop(to_move.to);
                     }
-                    PieceType::Knight(player) => {
+                    PieceType::Knight(_) => {
                         move_data.capture = CapturedPiece::Knight(to_move.to)
                     }
-                    PieceType::Queen(player) => {
+                    PieceType::Queen(_) => {
                         move_data.capture = CapturedPiece::Queen(to_move.to)
                     }
-                    PieceType::King(player) => {
+                    PieceType::King(_) => {
                         panic!()
                     }
                 }
@@ -1071,11 +1071,9 @@ impl BoardState {
             insert_moves(bishop, moves, move_list, &mut move_index);
         }
         for knight in indices_from_bitboard(player.knights) {
-            let mut moves =
+            let moves =
                 knight_moves(knight as usize, player.all_pieces()) & (capture_mask | push_mask);
-            if 1 << knight & pinned_pieces != 0 {
-                moves = 0;
-            } else {
+            if 1 << knight & pinned_pieces == 0 {
                 insert_moves(knight, moves, move_list, &mut move_index);
             }
         }
@@ -1173,7 +1171,7 @@ impl BoardState {
                         pawn,
                         move_,
                         Promotion::None,
-                    );;
+                    );
                     move_index += 1;
                 }
             }
@@ -1204,16 +1202,21 @@ impl BoardState {
     }
 }
 
-fn indices_from_bitboard(board: u64) -> Vec<u8> {
-    let mut result = Vec::with_capacity(board.count_ones() as usize);
-    let mut index = board.trailing_zeros() as u8;
-    let mut new_board = board;
-    while index <= 63 && new_board != 0 {
-        new_board = (board >> index) & !1;
-        result.push(index);
-        index += new_board.trailing_zeros() as u8;
+struct BitboardIterator(u64);
+
+    impl Iterator for BitboardIterator {
+        type Item = u8;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            if self.0.count_ones() == 0 {return None}
+            let result = self.0.trailing_zeros() as u8;
+            self.0 >>= result;
+            Some(result)
+        }
     }
-    result
+
+fn indices_from_bitboard(board: u64) -> BitboardIterator {
+    BitboardIterator(board)
 }
 
 fn find_opponent_attacked_squares(
@@ -1234,17 +1237,13 @@ fn find_opponent_attacked_squares(
     );
     let mut attacked_squares = 0;
     attacked_squares |= indices_from_bitboard(opponent.rooks)
-        .iter()
-        .fold(0, |x, y| x | rook_moves(*y as usize, all_pieces, 0));
+        .fold(0, |x, y| x | rook_moves(y as usize, all_pieces, 0));
     attacked_squares |= indices_from_bitboard(opponent.bishops)
-        .iter()
-        .fold(0, |x, y| x | bishop_moves(*y as usize, all_pieces, 0));
+        .fold(0, |x, y| x | bishop_moves(y as usize, all_pieces, 0));
     attacked_squares |= indices_from_bitboard(opponent.queens)
-        .iter()
-        .fold(0, |x, y| x | queen_moves(*y as usize, all_pieces, 0));
+        .fold(0, |x, y| x | queen_moves(y as usize, all_pieces, 0));
     attacked_squares |= indices_from_bitboard(opponent.knights)
-        .iter()
-        .fold(0, |x, y| x | knight_moves(*y as usize, 0));
+        .fold(0, |x, y| x | knight_moves(y as usize, 0));
     attacked_squares |= king_moves(opponent.king.ilog2() as usize, 0);
     attacked_squares |= pawn_attacked_squares[0] | pawn_attacked_squares[1];
     attacked_squares
@@ -1776,15 +1775,6 @@ fn move_to_algebraic(move_: &Move, board: &BoardState) -> String {
         ""
     };
     piece.to_owned() + file + rank + capture + to_square + promotion
-}
-
-fn moves_to_algebraic(moves: &[Move], board: &BoardState) -> Vec<String> {
-    //does not account for captures, check, or checkmate yet
-    let mut result = vec![];
-    for m in moves {
-        result.push(move_to_algebraic(m, board));
-    }
-    result
 }
 
 fn queen_moves(square: usize, all_pieces: u64, friendly_pieces: u64) -> u64 {
