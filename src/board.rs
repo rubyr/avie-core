@@ -1817,11 +1817,12 @@ pub fn perft_div(board: &mut BoardState, depth: u8) -> u64 {
         }
         return moves.len() as u64;
     };
-    for player_move in moves.iter().rev() {
-        let move_string = move_to_algebraic(player_move, board);
+    let move_strings: Vec<_> = moves.iter().rev().map(|x| move_to_algebraic(x, board)).collect();
+    for (i, player_move) in moves.iter().rev().enumerate() {
+        
         board.make_move(*player_move);
         let result = perft(board, depth - 1);
-        println!("{}: {}", move_string, result);
+        println!("{}: {}", move_strings[i], result);
         move_count += result;
         board.unmake_last_move();
     }
