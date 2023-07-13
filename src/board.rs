@@ -631,7 +631,7 @@ impl BoardState {
     }
 
     fn make_move(&mut self, to_move: Move) {
-        let move_str = move_to_algebraic(&to_move, &self);
+        //let move_str = move_to_algebraic(&to_move, &self);
         let mut move_data = UnmakeMoveData {
             castling_rights: crate::gamestate::CastlingRights {
                 black_kingside: self.black.king_castle,
@@ -779,7 +779,7 @@ impl BoardState {
                         let row = (old_king >> (56 - (i * 8))) as u8;
                         println!("{:08b}", row);
                     }
-                    println!("move string: {}", move_str);
+                    //println!("move string: {}", move_str);
                     println!("move struct: {:?}", to_move);
                     println!("{:?}", self.move_stack);
                     panic!();
@@ -1783,7 +1783,7 @@ fn queen_moves(square: usize, all_pieces: u64, friendly_pieces: u64) -> u64 {
     bishop_moves(square, all_pieces, friendly_pieces) | rook_moves(square, all_pieces, friendly_pieces)
 }
 
-fn perft(board: &mut BoardState, depth: u8) -> u64 {
+pub fn perft(board: &mut BoardState, depth: u8) -> u64 {
     let mut move_count = 0;
     let mut move_array = [Move {
         from: 0,
