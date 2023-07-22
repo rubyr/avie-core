@@ -27,7 +27,7 @@ mod test {
                 king_castle: false,
             },
             active_player: Player::White,
-            en_passant_target: EnPassantTarget(0x80),
+            en_passant_target: EnPassantTarget(EN_PASSANT_NO_SQUARE),
             full_counter: 1,
             half_counter: 0,
             move_stack: vec![],
@@ -56,7 +56,7 @@ mod test {
                 king_castle: false,
             },
             active_player: Player::White,
-            en_passant_target: EnPassantTarget(0x80),
+            en_passant_target: EnPassantTarget(EN_PASSANT_NO_SQUARE),
             full_counter: 1,
             half_counter: 0,
             move_stack: vec![],
@@ -85,7 +85,7 @@ mod test {
                 king_castle: false,
             },
             active_player: Player::White,
-            en_passant_target: EnPassantTarget(0x80),
+            en_passant_target: EnPassantTarget(EN_PASSANT_NO_SQUARE),
             full_counter: 1,
             half_counter: 0,
             move_stack: vec![],
@@ -155,7 +155,7 @@ mod test {
                 king_castle: false,
             },
             active_player: Player::White,
-            en_passant_target: EnPassantTarget(0x80),
+            en_passant_target: EnPassantTarget(EN_PASSANT_NO_SQUARE),
             full_counter: 1,
             half_counter: 0,
             move_stack: vec![],
@@ -258,7 +258,7 @@ mod test {
                     queen_castle: true
                 },
                 active_player: Player::White,
-                en_passant_target: EnPassantTarget(0x80),
+                en_passant_target: EnPassantTarget(EN_PASSANT_NO_SQUARE),
                 half_counter: 0,
                 full_counter: 1,
                 move_stack: vec![]
@@ -374,7 +374,7 @@ mod test {
                 queen_castle: true,
             },
             active_player: Player::White,
-            en_passant_target: EnPassantTarget(0x80),
+            en_passant_target: EnPassantTarget(EN_PASSANT_NO_SQUARE),
             half_counter: 0,
             full_counter: 1,
             move_stack: vec![],
@@ -434,21 +434,24 @@ impl PlayerState {
 ///  0b00XXXXXX: square of valid en passant target. bitboard is obtained by shifting 1u64 by this value.
 #[derive(Clone, PartialEq, Eq, Debug)]
 struct EnPassantTarget(u8);
+static EN_PASSANT_NO_SQUARE: u8 = 0b10000000;
+static EN_PASSANT_SQUARE_MASK: u8 = 0b00111111;
+static EN_PASSANT_TARGET_BLACK: u8 = 0b01000000;
 
 impl EnPassantTarget {
     fn targeted_player(&self) -> Option<Player> {
         match self.0 >> 6 {
             0 => Some(Player::White),
             1 => Some(Player::Black),
-            2 | 3 => None,
-            _ => unreachable!(),
+            //all other values mean there is no en passant target
+            _ => None,
         }
     }
     fn targeted_square(&self) -> u64 {
-        if self.0 >> 7 != 0 {
+        if self.0 & EN_PASSANT_NO_SQUARE != 0 {
             return 0;
         }
-        1u64 << (self.0 & 0b00111111)
+        1u64 << (self.0 & EN_PASSANT_SQUARE_MASK)
     }
 }
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -550,10 +553,10 @@ impl Move {
 
 fn en_passant_target(target: &Option<(File, Rank)>) -> EnPassantTarget {
     match target {
-        None => EnPassantTarget(0x80),
+        None => EnPassantTarget(EN_PASSANT_NO_SQUARE),
         Some((file, rank)) => {
             let playermask = if *rank == Rank::Six {
-                0b01000000u8
+                1u8 << 6
             } else {
                 0u8
             };
@@ -570,6 +573,45 @@ enum PieceType {
     Bishop(Player),
     Queen(Player),
     King(Player),
+}
+
+/*macro_rules! build_tree {
+    ($str: ident, $($rest: tt)*) => {
+        {
+            let mut builder = GreenNodeBuilder::new();
+            build_tree_helper!(builder, $str, $($rest)*);
+            builder.finish()
+        }
+    }
+}
+#[allow(unused_macros)]
+macro_rules! build_tree_helper {
+    ($builder: ident, $str: ident,) => {};
+    ($builder: ident, $str: ident, $token: ident [ $range: expr ] $($list:tt)* ) => {
+        $builder.token(TokenKind::$token.into(), &$str[$range]);
+        build_tree_helper!($builder, $str, $($list)*)
+    };
+    ($builder: ident, $str: ident, $token: ident { $($list: tt)* } $($rest:tt)*) => { 
+        $builder.start_node(TokenKind::$token.into());
+        build_tree_helper!($builder, $str, $($list)*);
+        $builder.finish_node();
+        build_tree_helper!($builder, $str, $($rest)*);
+    }
+}*/
+
+macro_rules! match_bits {
+    ($square: ident) => {
+       None
+    };
+    ($square: ident, $compared: expr => $result: expr) => {
+        if $square & $compared != 0 {Some($result)} else {match_bits!{$square}}
+    };
+    ($square: ident, $compared: expr => $result: expr,) => {
+        if $square & $compared != 0 {Some($result)} else {match_bits!{$square}}
+    };
+    ($square: ident, $compared: expr => $result: expr, $($rest:tt)*) => {
+        if $square & $compared != 0 {Some($result)} else {match_bits!{$square, $($rest)*}}
+    }
 }
 
 impl BoardState {
@@ -600,38 +642,24 @@ impl BoardState {
 
     fn find_piece_on_square(&self, square: u8) -> Option<PieceType> {
         let square_board: u64 = 1 << square;
-        let piece = if self.white.pawns & square_board != 0 {
-            PieceType::Pawn(Player::White)
-        } else if self.white.rooks & square_board != 0 {
-            PieceType::Rook(Player::White)
-        } else if self.white.bishops & square_board != 0 {
-            PieceType::Bishop(Player::White)
-        } else if self.white.knights & square_board != 0 {
-            PieceType::Knight(Player::White)
-        } else if self.white.queens & square_board != 0 {
-            PieceType::Queen(Player::White)
-        } else if self.white.king & square_board != 0 {
-            PieceType::King(Player::White)
-        } else if self.black.pawns & square_board != 0 {
-            PieceType::Pawn(Player::Black)
-        } else if self.black.rooks & square_board != 0 {
-            PieceType::Rook(Player::Black)
-        } else if self.black.bishops & square_board != 0 {
-            PieceType::Bishop(Player::Black)
-        } else if self.black.knights & square_board != 0 {
-            PieceType::Knight(Player::Black)
-        } else if self.black.queens & square_board != 0 {
-            PieceType::Queen(Player::Black)
-        } else if self.black.king & square_board != 0 {
-            PieceType::King(Player::Black)
-        } else {
-            return None;
-        };
-        Some(piece)
+        match_bits!{
+            square_board,
+            self.white.pawns => PieceType::Pawn(Player::White),
+            self.white.bishops => PieceType::Bishop(Player::White),
+            self.white.knights => PieceType::Knight(Player::White),
+            self.white.rooks => PieceType::Rook(Player::White),
+            self.white.queens => PieceType::Queen(Player::White),
+            self.white.king => PieceType::King(Player::White),
+            self.black.pawns => PieceType::Pawn(Player::Black),
+            self.black.bishops => PieceType::Bishop(Player::Black),
+            self.black.knights => PieceType::Knight(Player::Black),
+            self.black.rooks => PieceType::Rook(Player::Black),
+            self.black.queens => PieceType::Queen(Player::Black),
+            self.black.king => PieceType::King(Player::Black),
+        }
     }
 
     fn make_move(&mut self, to_move: Move) {
-        //let move_str = move_to_algebraic(&to_move, &self);
         let mut move_data = UnmakeMoveData {
             castling_rights: crate::gamestate::CastlingRights {
                 black_kingside: self.black.king_castle,
@@ -767,21 +795,21 @@ impl BoardState {
                 player.queen_castle = false;
                 player.king_castle = false;
                 if player.king.count_ones() != 1 {
-                    println!("active player: {:?}", active_player);
-                    println!("actual active player: {:?}", self.active_player);
-                    println!("kings: {}", player.king.count_ones());
+                    eprintln!("active player: {:?}", active_player);
+                    eprintln!("actual active player: {:?}", self.active_player);
+                    eprintln!("kings: {}", player.king.count_ones());
                     for i in 0..=7u8 {
                         let row = (player.king >> (56 - (i * 8))) as u8;
-                        println!("{:08b}", row);
+                        eprintln!("{:08b}", row);
                     }
-                    println!("");
+                    eprintln!("");
                     for i in 0..=7u8 {
                         let row = (old_king >> (56 - (i * 8))) as u8;
-                        println!("{:08b}", row);
+                        eprintln!("{:08b}", row);
                     }
                     //println!("move string: {}", move_str);
-                    println!("move struct: {:?}", to_move);
-                    println!("{:?}", self.move_stack);
+                    eprintln!("move struct: {:?}", to_move);
+                    eprintln!("{:?}", self.move_stack);
                     panic!();
                 }
             }
@@ -795,10 +823,10 @@ impl BoardState {
                             + ((to_move.from + to_move.to) / 2) as u8,
                     );
                 } else {
-                    self.en_passant_target = EnPassantTarget(0x80);
+                    self.en_passant_target = EnPassantTarget(EN_PASSANT_NO_SQUARE);
                 }
             }
-            _ => self.en_passant_target = EnPassantTarget(0x80),
+            _ => self.en_passant_target = EnPassantTarget(EN_PASSANT_NO_SQUARE),
         };
         self.active_player = if self.active_player == Player::Black {
             Player::White
@@ -819,8 +847,6 @@ impl BoardState {
         }
 
         let (last_move, move_data) = self.move_stack.pop().unwrap();
-        let temp = Move::new(last_move.to, last_move.from, last_move.promotion);
-        //let move_str = move_to_algebraic(&temp, &self);
         self.active_player = match self.active_player {
             Player::Black => {
                 self.full_counter -= 1;
@@ -904,21 +930,21 @@ impl BoardState {
                 }
 
                 if player.king.count_ones() != 1 {
-                    println!("active player: {:?}", active_player);
-                    println!("actual active player: {:?}", self.active_player);
-                    println!("kings: {}", player.king.count_ones());
+                    eprintln!("active player: {:?}", active_player);
+                    eprintln!("actual active player: {:?}", self.active_player);
+                    eprintln!("kings: {}", player.king.count_ones());
                     for i in 0..=7u8 {
                         let row = (player.king >> (56 - (i * 8))) as u8;
                         println!("{:08b}", row);
                     }
-                    println!("");
+                    eprintln!("");
                     for i in 0..=7u8 {
                         let row = (old_king >> (56 - (i * 8))) as u8;
                         println!("{:08b}", row);
                     }
                     //println!("move string: {:?}", move_str);
-                    println!("move struct: {:?}", last_move);
-                    println!("{:?}", self.move_stack);
+                    eprintln!("move struct: {:?}", last_move);
+                    eprintln!("{:?}", self.move_stack);
                     panic!();
                 }
             }
