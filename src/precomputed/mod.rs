@@ -1,6 +1,23 @@
 pub mod rook_magic;
 pub mod bishop_magic;
+
+static FILE_A: u64 = 0x8080808080808080u64;
+static FILE_B: u64 = 0x4040404040404040u64;
+static FILE_G: u64 = 0x0202020202020202u64;
+static FILE_H: u64 = 0x0101010101010101u64;
+static NOT_FILE_A: u64 = !FILE_A;
+static NOT_FILE_B: u64 = !FILE_B;
+static NOT_FILE_G: u64 = !FILE_G;
+static NOT_FILE_H: u64 = !FILE_H;
+static NOT_FILE_AB: u64 = NOT_FILE_A & NOT_FILE_B;
+static NOT_FILE_GH: u64 = NOT_FILE_G & NOT_FILE_H;
+static RANK_1: u64 = 0x00000000000000FFu64;
+static RANK_8: u64 = 0xFF00000000000000u64;
+static MAIN_DIAGONAL: u64 = 0x8040201008040201u64;
+static ANTIMAIN_DIAGONAL: u64 = 0x0102040810204080u64;
+
 mod test {
+    use super::*;
     use std::io::Write;
     #[test]
     fn generate_knight_moves() {
@@ -8,20 +25,14 @@ mod test {
         for i in 0..64 {
             let knights = 1 << i;
             let mut current_move = [0u64; 8];
-            let not_a_file = 0x7F7F7F7F7F7F7F7Fu64;
-            let not_b_file = 0xBFBFBFBFBFBFBFBFu64;
-            let not_g_file = 0xFDFDFDFDFDFDFDFDu64;
-            let not_h_file = 0xFEFEFEFEFEFEFEFEu64;
-            let not_ab_file = not_a_file & not_b_file;
-            let not_gh_file = not_g_file & not_h_file;
-            current_move[0] = (knights << 17) & not_h_file;
-            current_move[1] = (knights << 10) & not_gh_file;
-            current_move[2] = (knights >> 6) & not_gh_file;
-            current_move[3] = (knights >> 15) & not_h_file;
-            current_move[7] = (knights << 15) & not_a_file;
-            current_move[6] = (knights << 6) & not_ab_file;
-            current_move[5] = (knights >> 10) & not_ab_file;
-            current_move[4] = (knights >> 17) & not_a_file;
+            current_move[0] = (knights << 17) & NOT_FILE_H;
+            current_move[1] = (knights << 10) & NOT_FILE_GH;
+            current_move[2] = (knights >> 6) & NOT_FILE_GH;
+            current_move[3] = (knights >> 15) & NOT_FILE_H;
+            current_move[7] = (knights << 15) & NOT_FILE_A;
+            current_move[6] = (knights << 6) & NOT_FILE_AB;
+            current_move[5] = (knights >> 10) & NOT_FILE_AB;
+            current_move[4] = (knights >> 17) & NOT_FILE_A;
             moves[i] = current_move.iter().fold(0, |x, y| x | y);
         }
         print!("[");
@@ -38,14 +49,12 @@ mod test {
     }
     #[test]
     fn generate_king_moves() {
-        let not_a_file = 0x7F7F7F7F7F7F7F7Fu64;
-        let not_h_file = 0xFEFEFEFEFEFEFEFEu64;
         let mut moves = [0u64; 64];
         for i in 0..64 {
             let king = 1 << i;
-            moves[i] = ((king << 9 | king << 1 | king >> 7) & not_h_file)
+            moves[i] = ((king << 9 | king << 1 | king >> 7) & NOT_FILE_H)
                 | king << 8
-                | ((king << 7 | king >> 1 | king >> 9) & not_a_file)
+                | ((king << 7 | king >> 1 | king >> 9) & NOT_FILE_A)
                 | king >> 8;
         }
         print!("[");
@@ -66,24 +75,24 @@ mod test {
         let mut file_mask = [0u64; 8];
         let mut rank_mask = [0u64; 8];
         for i in 0..8 {
-            file_mask[i] = 0x0101010101010101u64 << i;
-            rank_mask[i] = 0xFFu64 << i * 8;
+            file_mask[i] = FILE_H << i;
+            rank_mask[i] = RANK_1 << i * 8;
         }
         print!("[");
         let mut first = true;
         for i in 0..64 {
             let mut bitmask = 0u64;
             if i / 8 != 7 {
-                bitmask |= 0xFF00000000000000u64
+                bitmask |= RANK_8
             };
             if i / 8 != 0 {
-                bitmask |= 0xFFu64
+                bitmask |= RANK_1
             };
             if i % 8 != 7 {
-                bitmask |= 0x8080808080808080u64
+                bitmask |= FILE_A
             };
             if i % 8 != 0 {
-                bitmask |= 0x0101010101010101u64
+                bitmask |= FILE_H
             };
             mask[i] = (file_mask[i % 8] | rank_mask[i / 8]) & !(1 << i); //& !bitmask;
             if first == true {
@@ -97,8 +106,6 @@ mod test {
     }
     #[test]
     fn generate_bishop_mask() {
-        let main_diag = 0x8040201008040201u64;
-        let antimain_diag = 0x0102040810204080u64;
         let mut mask = [0u64; 64];
 
         print!("[");
@@ -110,9 +117,9 @@ mod test {
             let anti_diag = 56 - 8 * (i & 7) - (i & 56);
             let anti_diag_north = -anti_diag & (anti_diag >> 31);
             let anti_diag_south = anti_diag & (-anti_diag >> 31);
-            mask[i as usize] = (((main_diag as u64 >> diag_south) << diag_north)
-                | ((antimain_diag as u64 >> anti_diag_south) << anti_diag_north))
-                & !(1 << i); //& !(0xFF818181818181FFu64);
+            mask[i as usize] = (((MAIN_DIAGONAL as u64 >> diag_south) << diag_north)
+                | ((ANTIMAIN_DIAGONAL as u64 >> anti_diag_south) << anti_diag_north))
+                & !(1 << i);
 
             if first == true {
                 first = false;
@@ -129,10 +136,10 @@ mod test {
 
     impl Piece {
         fn moves(&self, square: u64, blockers: u64) -> u64{
-            let up_blocked = blockers | 0xFF00000000000000u64;
-            let down_blocked = blockers | 0xFFu64;
-            let west_blocked = blockers | 0x8080808080808080u64;
-            let east_blocked = blockers | 0x0101010101010101u64;
+            let up_blocked = blockers | RANK_8;
+            let down_blocked = blockers | RANK_1;
+            let west_blocked = blockers | FILE_A;
+            let east_blocked = blockers | FILE_H;
             let up_east_blocked = up_blocked | east_blocked;
             let up_west_blocked = up_blocked | west_blocked;
             let down_west_blocked = down_blocked | west_blocked;
@@ -230,7 +237,6 @@ mod test {
         }
         let mut string = format!("pub static ROOK_MAGICS : [u64;64] = [");
         let mut string2 = format!("pub static ROOK_ATTACKS: [[u64;{:?}];64] = [", 1<<bits);
-        let mut first = true;
         let mut first = true;
         for (magic, list) in array {
             if first == true {
