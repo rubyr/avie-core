@@ -1,5 +1,12 @@
 use crate::gamestate::{File, ParsedGameState, Player, Rank};
 
+static FILE_A: u64 = 0x8080808080808080u64;
+static NOT_FILE_A: u64 = !FILE_A;
+static NOT_FILE_H: u64 = !FILE_H;
+static FILE_H: u64 = 0x0101010101010101u64;
+static RANK_1: u64 = 0x00000000000000FFu64;
+static RANK_2: u64 = 0x000000000000FF00u64;
+static RANK_7: u64 = 0x00FF000000000000u64;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 struct PlayerState {
@@ -41,7 +48,6 @@ impl PlayerState {
 struct EnPassantTarget(u8);
 static EN_PASSANT_NO_SQUARE: u8 = 0b10000000;
 static EN_PASSANT_SQUARE_MASK: u8 = 0b00111111;
-static EN_PASSANT_TARGET_BLACK: u8 = 0b01000000;
 
 impl EnPassantTarget {
     fn targeted_player(&self) -> Option<Player> {
@@ -916,14 +922,14 @@ fn pawn_single_pushes(pawns: u64, all_pieces: u64, player: Player) -> u64 {
 }
 fn pawn_double_pushes(pawns: u64, all_pieces: u64, player: Player) -> u64 {
     if player == Player::Black {
-        if pawns & 0x00FF000000000000 != 0 {
-            ((pawns & 0x00FF000000000000) >> 16) & (!all_pieces) & (!(all_pieces >> 8))
+        if pawns & RANK_7 != 0 {
+            ((pawns & RANK_7) >> 16) & (!all_pieces) & (!(all_pieces >> 8))
         } else {
             0
         }
     } else {
-        if pawns & 0x000000000000FF00 != 0 {
-            ((pawns & 0x000000000000FF00) << 16) & (!all_pieces) & (!(all_pieces << 8))
+        if pawns & RANK_2 != 0 {
+            ((pawns & RANK_2) << 16) & (!all_pieces) & (!(all_pieces << 8))
         } else {
             0
         }
@@ -936,8 +942,6 @@ fn pawn_attacks(
     en_passant_target: EnPassantTarget,
     player: Player,
 ) -> [u64; 2] {
-    let not_a_file = 0x7F7F7F7F7F7F7F7Fu64;
-    let not_h_file = 0xFEFEFEFEFEFEFEFEu64;
     let target = if Some(player) != en_passant_target.targeted_player() {
         en_passant_target.targeted_square()
     } else {
@@ -946,15 +950,15 @@ fn pawn_attacks(
 
     //println!("{}", en_passant_target.targeted_square());
     if player == Player::Black {
-        let west_attack_squares = (pawns >> 7) & not_h_file;
-        let east_attack_squares = (pawns >> 9) & not_a_file;
+        let west_attack_squares = (pawns >> 7) & NOT_FILE_H;
+        let east_attack_squares = (pawns >> 9) & NOT_FILE_A;
         [
             west_attack_squares & (enemy_pieces | target),
             east_attack_squares & (enemy_pieces | target),
         ]
     } else {
-        let west_attack_squares = (pawns << 9) & not_h_file;
-        let east_attack_squares = (pawns << 7) & not_a_file;
+        let west_attack_squares = (pawns << 9) & NOT_FILE_H;
+        let east_attack_squares = (pawns << 7) & NOT_FILE_A;
         [
             west_attack_squares & (enemy_pieces | target),
             east_attack_squares & (enemy_pieces | target),
@@ -963,7 +967,7 @@ fn pawn_attacks(
 }
 
 fn king_moves(square: usize, friendly_pieces: u64) -> u64 {
-    crate::precomputed::KING_MOVES[square] & !friendly_pieces
+    crate::precomputed::precomputed::KING_MOVES[square] & !friendly_pieces
 }
 
 fn king_castles(
@@ -1096,19 +1100,19 @@ fn king_pins_bishop(
 }
 
 fn knight_moves(square: usize, friendly_pieces: u64) -> u64 {
-    crate::precomputed::KNIGHT_MOVES[square] & !friendly_pieces
+    crate::precomputed::precomputed::KNIGHT_MOVES[square] & !friendly_pieces
 }
 
 fn bishop_moves(square: usize, all_pieces: u64, friendly_pieces: u64) -> u64 {
     let magic = crate::precomputed::bishop_magic::BISHOP_MAGICS[square];
-    let blockers = all_pieces & crate::precomputed::BISHOP_MASK[square];
+    let blockers = all_pieces & crate::precomputed::precomputed::BISHOP_MASK[square];
     let magic_index = crate::precomputed::magic_to_index(magic, blockers, 9);
     crate::precomputed::bishop_magic::BISHOP_ATTACKS[square][magic_index] & !friendly_pieces
 }
 
 fn rook_moves(square: usize, all_pieces: u64, friendly_pieces: u64) -> u64 {
     let magic = crate::precomputed::rook_magic::ROOK_MAGICS[square];
-    let blockers = all_pieces & crate::precomputed::ROOK_MASK[square];
+    let blockers = all_pieces & crate::precomputed::precomputed::ROOK_MASK[square];
     let magic_index = crate::precomputed::magic_to_index(magic, blockers, 12);
     crate::precomputed::rook_magic::ROOK_ATTACKS[square][magic_index] & !friendly_pieces
 }
@@ -1127,8 +1131,8 @@ fn move_to_algebraic(move_: &Move, board: &BoardState) -> String {
     ];
     static FILES: [&'static str; 8] = ["h", "g", "f", "e", "d", "c", "b", "a"];
     static RANKS: [&'static str; 8] = ["1", "2", "3", "4", "5", "6", "7", "8"];
-    let file_mask = 0x0101010101010101u64 << move_.from % 8;
-    let rank_mask = 0xFF << move_.from / 8;
+    let file_mask = FILE_H << move_.from % 8;
+    let rank_mask = RANK_1 << move_.from / 8;
     let mut rank = "";
     let mut file = "";
     let mut promotion = "";
