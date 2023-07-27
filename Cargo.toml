@@ -3,6 +3,9 @@ name = "avie-core"
 version = "0.1.0"
 edition = "2021"
 
+[profile.test]
+opt-level = 3
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]

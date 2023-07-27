@@ -12,12 +12,13 @@ static RANK_1: u64 = 0x00000000000000FFu64;
 static RANK_8: u64 = 0xFF00000000000000u64;
 static MAIN_DIAGONAL: u64 = 0x8040201008040201u64;
 static ANTIMAIN_DIAGONAL: u64 = 0x0102040810204080u64;
+static BISHOP_REMOVE: u64 = 0xFF818181818181FFu64;
 
 use std::io::Write;
 
 pub fn generate_knight_moves() -> String {
     let mut moves = [0u64; 64];
-    for i in 0..64 {
+    for (i, move_) in moves.iter_mut().enumerate() {
         let knights = 1 << i;
         let mut current_move = [0u64; 8];
         current_move[0] = (knights << 17) & NOT_FILE_H;
@@ -28,13 +29,13 @@ pub fn generate_knight_moves() -> String {
         current_move[6] = (knights << 6) & NOT_FILE_AB;
         current_move[5] = (knights >> 10) & NOT_FILE_AB;
         current_move[4] = (knights >> 17) & NOT_FILE_A;
-        moves[i] = current_move.iter().fold(0, |x, y| x | y);
+        *move_ = current_move.iter().fold(0, |x, y| x | y);
     }
     let mut string = String::new();
     string.push_str("[\n");
     let mut first = true;
     for i in moves {
-        if first == true {
+        if first {
             first = false;
         } else {
             string.push_str(", \n")
@@ -47,9 +48,9 @@ pub fn generate_knight_moves() -> String {
 
 pub fn generate_king_moves() -> String {
     let mut moves = [0u64; 64];
-    for i in 0..64 {
+    for (i, move_) in moves.iter_mut().enumerate() {
         let king = 1 << i;
-        moves[i] = ((king << 9 | king << 1 | king >> 7) & NOT_FILE_H)
+        *move_ = ((king << 9 | king << 1 | king >> 7) & NOT_FILE_H)
             | king << 8
             | ((king << 7 | king >> 1 | king >> 9) & NOT_FILE_A)
             | king >> 8;
@@ -58,7 +59,7 @@ pub fn generate_king_moves() -> String {
     string.push_str("[\n");
     let mut first = true;
     for i in moves {
-        if first == true {
+        if first {
             first = false;
         } else {
             string.push_str(", \n")
@@ -75,12 +76,9 @@ pub fn generate_rook_mask() -> [u64; 64] {
     let mut rank_mask = [0u64; 8];
     for i in 0..8 {
         file_mask[i] = FILE_H << i;
-        rank_mask[i] = RANK_1 << i * 8;
-    }
-    let mut string = String::new();
-    string.push_str("[");
-    let mut first = true;
-    for i in 0..64 {
+        rank_mask[i] = RANK_1 << (i * 8);
+    };
+    for (i, mask) in mask.iter_mut().enumerate() {
         let mut bitmask = 0u64;
         if i / 8 != 7 {
             bitmask |= RANK_8
@@ -94,16 +92,13 @@ pub fn generate_rook_mask() -> [u64; 64] {
         if i % 8 != 0 {
             bitmask |= FILE_H
         };
-        mask[i] = (file_mask[i % 8] | rank_mask[i / 8]) & !(1 << i); //& !bitmask;
+        *mask = (file_mask[i % 8] | rank_mask[i / 8]) & !(1 << i) & !bitmask;
     }
     mask
 }
 
 pub fn generate_bishop_mask() -> [u64; 64] {
     let mut mask = [0u64; 64];
-    let mut string = String::new();
-    string.push_str("[");
-    let mut first = true;
     for i in 0..64isize {
         let diag = 8 * (i & 7) - (i & 56);
         let diag_north = -diag & (diag >> 31);
@@ -111,9 +106,9 @@ pub fn generate_bishop_mask() -> [u64; 64] {
         let anti_diag = 56 - 8 * (i & 7) - (i & 56);
         let anti_diag_north = -anti_diag & (anti_diag >> 31);
         let anti_diag_south = anti_diag & (-anti_diag >> 31);
-        mask[i as usize] = (((MAIN_DIAGONAL as u64 >> diag_south) << diag_north)
-            | ((ANTIMAIN_DIAGONAL as u64 >> anti_diag_south) << anti_diag_north))
-            & !(1 << i);
+        mask[i as usize] = (((MAIN_DIAGONAL >> diag_south) << diag_north)
+            | ((ANTIMAIN_DIAGONAL >> anti_diag_south) << anti_diag_north))
+            & !(1 << i) & !BISHOP_REMOVE;
     };
     mask
 }
@@ -205,46 +200,41 @@ impl Piece {
     }
 }
 
+const ROOK_TABLE_SIZE: usize = 4096;
+const ROOK_BITS: u64 = 12;
+
 pub fn generate_rook_magics(mask: &[u64; 64]) -> String{
-    let mut array: Vec<(u64, Vec<u64>)> = vec![(0, vec![]);64];
-    let bits = 12;
+    let mut array = vec![(0, [0;ROOK_TABLE_SIZE]);64];
     let mut found = 0;
-    for square in 0..64 {
-        't: loop {
-            let magic = rand::random::<u64>() & rand::random::<u64>() & rand::random::<u64>();
-            let rook_mask = mask[square as usize];
-            if let Ok(table) = generate_table(magic, rook_mask, bits, square, Piece::Rook) {
-                println!("index: {:?}", square);
-                array[square as usize] = (magic, table);
-                found += 1;
-                println!("found {} rook magics", found);
-                //println!("(magic: {:?}, bits: {:?}, table: {:?})", magic, bits, table);
-                break 't;
-            }
-        }
+    for square in 0..64u64 {
+        let rook_mask = mask[square as usize];
+        let (magic, table) = generate_table::<ROOK_BITS, ROOK_TABLE_SIZE>(square, rook_mask, Piece::Rook);
+        array[square as usize] = (magic, table);
+        found += 1;
+        println!("found {} rook magics", found);
     }
-    let mut string = format!("pub static ROOK_MAGICS : [u64;64] = [");
-    let mut string2 = format!("pub static ROOK_ATTACKS: [[u64;{:?}];64] = [", 1<<bits);
+    let mut string = "pub static ROOK_MAGICS : [u64;64] = [".to_owned();
+    let mut string2 = format!("pub static ROOK_ATTACKS: [[u64;{:?}];64] = [", 1u64<<ROOK_BITS);
     let mut first = true;
     for (magic, list) in array {
-        if first == true {
+        if first {
             first = false;
         }
         else {
             string.push_str(", \n");
             string2.push_str(", \n");
         }
-        string.push_str(&mut format!("\t0x{:016X}", magic));
+        string.push_str(&format!("\t0x{:016X}", magic));
         string2.push_str("\t[\n");
         let mut first_list = true;
         for i in list {
-            if first_list == true {
+            if first_list {
                 first_list = false;
             }
             else {
                 string2.push_str(", \n");
             }
-            string2.push_str(&mut format!("\t\t0x{:016X}", i));
+            string2.push_str(&format!("\t\t0x{:016X}", i));
         }
         string2.push_str("\n\t]");
     };
@@ -254,46 +244,40 @@ pub fn generate_rook_magics(mask: &[u64; 64]) -> String{
     string
 }
 
+const BISHOP_TABLE_SIZE: usize = 512;
+const BISHOP_BITS: u64 = 9;
 pub fn generate_bishop_magics(mask: &[u64; 64]) -> String {
-    let mut array: Vec<(u64, Vec<u64>)> = vec![(0, vec![]);64];
-    let bits = 9;
+    let mut array = vec![(0u64, [0u64; BISHOP_TABLE_SIZE]); 64];
     let mut found = 0;
-    for square in 0..64 {
-        't: loop {
-            let magic = rand::random::<u64>() & rand::random::<u64>() & rand::random::<u64>();
-            let bishop_mask = mask[square as usize];
-            if let Ok(table) = generate_table(magic, bishop_mask, bits, square, Piece::Bishop) {
-                println!("index: {:?}", square);
-                array[square as usize] = (magic, table);
-                found += 1;
-                println!("found {} bishop magics", found);
-                //println!("(magic: {:?}, bits: {:?}, table: {:?})", magic, bits, table);
-                break 't;
-            }
-        }
+    for square in 0..64u64 {
+        let bishop_mask = mask[square as usize];
+        let (magic, table) = generate_table::<BISHOP_BITS, BISHOP_TABLE_SIZE>(square, bishop_mask, Piece::Bishop);
+        array[square as usize] = (magic, table);
+        found += 1;
+        println!("found {} bishop magics", found);
     }
-    let mut string = format!("pub static BISHOP_MAGICS : [u64;64] = [\n");
-    let mut string2 = format!("pub static BISHOP_ATTACKS: [[u64;512];64] = [\n");
+    let mut string = "pub static BISHOP_MAGICS : [u64;64] = [\n".to_owned();
+    let mut string2 = "pub static BISHOP_ATTACKS: [[u64;512];64] = [\n".to_owned();
     let mut first = true;
     for (magic, list) in array {
-        if first == true {
+        if first {
             first = false;
         }
         else {
             string.push_str(", \n");
             string2.push_str(", \n");
         }
-        string.push_str(&mut format!("\t0x{:016X}", magic));
+        string.push_str(&format!("\t0x{:016X}", magic));
         string2.push_str("\t[\n");
         let mut first_list = true;
         for i in list {
-            if first_list == true {
+            if first_list {
                 first_list = false;
             }
             else {
                 string2.push_str(", \n");
             }
-            string2.push_str(&mut format!("\t\t0x{:016X}", i));
+            string2.push_str(&format!("\t\t0x{:016X}", i));
         }
         string2.push_str("\n\t]");
     };
@@ -303,19 +287,37 @@ pub fn generate_bishop_magics(mask: &[u64; 64]) -> String {
     string
 }
 
-fn generate_table(magic: u64, piece_mask: u64, bits: u64, square: u64, piece: Piece) -> Result<Vec<u64>, ()> {
-    let mut table = vec![0u64; 1 << bits];
-    for permutation in permutations(piece_mask) {
-        let moves = piece.moves(square, permutation);
-        let entry = &mut table[magic_to_index(magic, permutation, bits)];
-        if *entry == 0 {
-            *entry = moves;
+fn generate_table<const BITS: u64, const SIZE: usize>(square: u64, mask: u64, piece: Piece) -> (u64, [u64; SIZE]) {
+    use rand::SeedableRng;
+    use rand::RngCore;
+    let mut magic = 0;
+    let mut succeeded = false;
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+    
+    let permutations = permutations(mask);
+    let moves: Vec<_> = permutations.iter().map(|x| piece.moves(square, *x)).collect();
+    let mut table = [0u64; SIZE];
+    debug_assert_eq!(permutations.len(), moves.len());
+    while !succeeded {
+        succeeded = true;
+        magic = rng.next_u64() & rng.next_u64() & rng.next_u64();
+        if (mask.wrapping_mul(magic) & 0xFF00000000000000u64).count_ones() < 6 {
+            succeeded = false;
+            continue
         }
-        else if *entry != moves{
-            return Err(());
+        table = [0u64; SIZE];
+        'iterate: for (i, permutation) in permutations.iter().enumerate() {
+            let entry = &mut table[magic_to_index::<BITS>(magic, *permutation)];
+            if *entry == 0 {
+                *entry = moves[i];
+            }
+            else if *entry != moves[i]{
+                succeeded = false;
+                break 'iterate;
+            }
         }
-    }
-    Ok(table)
+    };
+    (magic, table)
 }
 
 fn permutations(piece_mask: u64) -> Vec<u64> {
@@ -335,30 +337,29 @@ fn permutations(piece_mask: u64) -> Vec<u64> {
     }
     permutations
 }
-
-pub fn magic_to_index(magic: u64, permutation: u64, bits: u64) -> usize {
-    (permutation.wrapping_mul(magic) >> (64 - bits)) as usize
+pub fn magic_to_index<const BITS: u64>(magic: u64, permutation: u64) -> usize {
+    (permutation.wrapping_mul(magic) >> (64 - BITS)) as usize
 }
 
 fn main() {
     let knight_moves = generate_knight_moves();
     let king_moves = generate_king_moves();
 
-    let mut move_file = std::fs::File::create("src/precomputed/precomputed.rs").unwrap();
+    let mut move_file = std::fs::File::create("src/precomputed/moves.rs").unwrap();
     let rook_mask = generate_rook_mask();
     let bishop_mask = generate_bishop_mask();
-    move_file.write("pub static KNIGHT_MOVES: [u64; 64] = ".as_bytes()).unwrap();
-    move_file.write(knight_moves.as_bytes()).unwrap();
-    move_file.write("pub static KING_MOVES: [u64; 64] = ".as_bytes()).unwrap();
-    move_file.write(king_moves.as_bytes()).unwrap();
-    move_file.write("pub static ROOK_MASK: [u64; 64] = ".as_bytes()).unwrap();
-    move_file.write(format!("{:#?};", rook_mask).as_bytes()).unwrap();
-    move_file.write("pub static BISHOP_MASK: [u64; 64] = ".as_bytes()).unwrap();
-    move_file.write(format!("{:#?};", bishop_mask).as_bytes()).unwrap();
-    //let bishop_magics = generate_bishop_magics(&bishop_mask);
-    //let rook_magics = generate_rook_magics(&rook_mask);
-    //let mut bishop_magic_file = std::fs::File::create("src/precomputed/bishop_magic.rs").unwrap();
-    //bishop_magic_file.write(bishop_magics.as_bytes()).unwrap();
-    //let mut rook_magic_file = std::fs::File::create("src/precomputed/rook_magic.rs").unwrap();
-    //rook_magic_file.write(rook_magics.as_bytes()).unwrap();
+    let bishop_magics = generate_bishop_magics(&bishop_mask);
+    let rook_magics = generate_rook_magics(&rook_mask);
+    move_file.write_all("pub static KNIGHT_MOVES: [u64; 64] = ".as_bytes()).unwrap();
+    move_file.write_all(knight_moves.as_bytes()).unwrap();
+    move_file.write_all("pub static KING_MOVES: [u64; 64] = ".as_bytes()).unwrap();
+    move_file.write_all(king_moves.as_bytes()).unwrap();
+    move_file.write_all("pub static ROOK_MASK: [u64; 64] = ".as_bytes()).unwrap();
+    move_file.write_all(format!("{:#?};", rook_mask).as_bytes()).unwrap();
+    move_file.write_all("pub static BISHOP_MASK: [u64; 64] = ".as_bytes()).unwrap();
+    move_file.write_all(format!("{:#?};", bishop_mask).as_bytes()).unwrap();
+    let mut file = std::fs::File::create("src/precomputed/bishop_magic.rs").unwrap();
+    file.write_all(bishop_magics.as_bytes()).unwrap();
+    let mut file = std::fs::File::create("src/precomputed/rook_magic.rs").unwrap();
+    file.write_all(rook_magics.as_bytes()).unwrap();
 }

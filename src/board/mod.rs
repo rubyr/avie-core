@@ -1,5 +1,5 @@
 use crate::gamestate::{File, ParsedGameState, Player, Rank};
-
+mod tests;
 static FILE_A: u64 = 0x8080808080808080u64;
 static NOT_FILE_A: u64 = !FILE_A;
 static NOT_FILE_H: u64 = !FILE_H;
@@ -7,7 +7,6 @@ static FILE_H: u64 = 0x0101010101010101u64;
 static RANK_1: u64 = 0x00000000000000FFu64;
 static RANK_2: u64 = 0x000000000000FF00u64;
 static RANK_7: u64 = 0x00FF000000000000u64;
-
 #[derive(Clone, PartialEq, Eq, Debug)]
 struct PlayerState {
     king: u64,
@@ -142,7 +141,7 @@ enum Promotion {
     Knight,
     Bishop,
     Rook,
-    Queen
+    Queen,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -166,11 +165,7 @@ fn en_passant_target(target: &Option<(File, Rank)>) -> EnPassantTarget {
     match target {
         None => EnPassantTarget(EN_PASSANT_NO_SQUARE),
         Some((file, rank)) => {
-            let playermask = if *rank == Rank::Six {
-                1u8 << 6
-            } else {
-                0u8
-            };
+            let playermask = if *rank == Rank::Six { 1u8 << 6 } else { 0u8 };
             let square: u8 = (7 - *file as u8) + (*rank as u8 * 8);
             EnPassantTarget(playermask | square)
         }
@@ -215,7 +210,7 @@ impl BoardState {
             full_counter: game.full_turn_clock,
             move_stack: vec![],
         };
-        debug_assert_eq!(result.is_valid(), true);
+        debug_assert!(result.is_valid());
         result
     }
 
@@ -229,7 +224,7 @@ impl BoardState {
 
     fn find_piece_on_square(&self, square: u8) -> Option<PieceType> {
         let square_board: u64 = 1 << square;
-        match_bits!{
+        match_bits! {
             square_board,
             self.white.pawns => PieceType::Pawn(Player::White),
             self.white.bishops => PieceType::Bishop(Player::White),
@@ -280,33 +275,27 @@ impl BoardState {
                     }
                 }
             }
-        } else {
-            if captured_piece.is_some() {
-                match captured_piece.unwrap() {
-                    PieceType::Pawn(_) => {
-                        move_data.capture = CapturedPiece::Pawn(to_move.to);
+        } else if let Some(captured_piece) = captured_piece {
+            match captured_piece {
+                PieceType::Pawn(_) => {
+                    move_data.capture = CapturedPiece::Pawn(to_move.to);
+                }
+                PieceType::Rook(_) => {
+                    move_data.capture = CapturedPiece::Rook(to_move.to);
+                    if opponent.king_castle && opponent.king.ilog2() as u8 > to_move.to {
+                        opponent.king_castle = false;
                     }
-                    PieceType::Rook(_) => {
-                        move_data.capture = CapturedPiece::Rook(to_move.to);
-                        if opponent.king_castle && opponent.king.ilog2() as u8 > to_move.to {
-                            opponent.king_castle = false;
-                        }
-                        if opponent.queen_castle && to_move.to > opponent.king.ilog2() as u8 {
-                            opponent.queen_castle = false;
-                        }
+                    if opponent.queen_castle && to_move.to > opponent.king.ilog2() as u8 {
+                        opponent.queen_castle = false;
                     }
-                    PieceType::Bishop(_) => {
-                        move_data.capture = CapturedPiece::Bishop(to_move.to);
-                    }
-                    PieceType::Knight(_) => {
-                        move_data.capture = CapturedPiece::Knight(to_move.to)
-                    }
-                    PieceType::Queen(_) => {
-                        move_data.capture = CapturedPiece::Queen(to_move.to)
-                    }
-                    PieceType::King(_) => {
-                        panic!()
-                    }
+                }
+                PieceType::Bishop(_) => {
+                    move_data.capture = CapturedPiece::Bishop(to_move.to);
+                }
+                PieceType::Knight(_) => move_data.capture = CapturedPiece::Knight(to_move.to),
+                PieceType::Queen(_) => move_data.capture = CapturedPiece::Queen(to_move.to),
+                PieceType::King(_) => {
+                    panic!()
                 }
             }
         }
@@ -338,11 +327,11 @@ impl BoardState {
                 //0: no promotion, 1: knight, 2: bishop, 3: rook, 4: queen
                 player.pawns &= !(1 << to_move.from);
                 match to_move.promotion {
-                Promotion::None => player.pawns |= 1 << to_move.to,
-                Promotion::Knight => player.knights |= 1 << to_move.to,
-                Promotion::Bishop => player.bishops |= 1 << to_move.to,
-                Promotion::Rook => player.rooks |= 1 << to_move.to,
-                Promotion::Queen => player.queens |= 1 << to_move.to,
+                    Promotion::None => player.pawns |= 1 << to_move.to,
+                    Promotion::Knight => player.knights |= 1 << to_move.to,
+                    Promotion::Bishop => player.bishops |= 1 << to_move.to,
+                    Promotion::Rook => player.rooks |= 1 << to_move.to,
+                    Promotion::Queen => player.queens |= 1 << to_move.to,
                 }
                 self.half_counter = 0;
             }
@@ -368,11 +357,11 @@ impl BoardState {
                 player.queens |= 1 << to_move.to;
             }
             PieceType::King(active_player) => {
-                if player.king_castle == true && 1 << to_move.to & 0x0200000000000002u64 != 0 {
+                if player.king_castle && 1 << to_move.to & 0x0200000000000002u64 != 0 {
                     player.rooks &= !(0x0100000000000001);
                     player.rooks |= 1 << (to_move.to + 1);
                 }
-                if player.queen_castle == true && 1 << to_move.to & 0x2000000000000020u64 != 0 {
+                if player.queen_castle && 1 << to_move.to & 0x2000000000000020u64 != 0 {
                     player.rooks &= !(0x8000000000000080);
                     player.rooks |= 1 << (to_move.to - 1);
                 }
@@ -389,7 +378,7 @@ impl BoardState {
                         let row = (player.king >> (56 - (i * 8))) as u8;
                         eprintln!("{:08b}", row);
                     }
-                    eprintln!("");
+                    eprintln!();
                     for i in 0..=7u8 {
                         let row = (old_king >> (56 - (i * 8))) as u8;
                         eprintln!("{:08b}", row);
@@ -407,7 +396,7 @@ impl BoardState {
                 if to_move.from.abs_diff(to_move.to) == 16 {
                     self.en_passant_target = EnPassantTarget(
                         0x40 * (self.active_player == Player::Black) as u8
-                            + ((to_move.from + to_move.to) / 2) as u8,
+                            + ((to_move.from + to_move.to) / 2),
                     );
                 } else {
                     self.en_passant_target = EnPassantTarget(EN_PASSANT_NO_SQUARE);
@@ -466,7 +455,7 @@ impl BoardState {
                     Promotion::None => player.rooks |= 1 << last_move.from,
                     Promotion::Rook => player.pawns |= 1 << last_move.from,
                     x => {
-                        println!("{:?}",x);
+                        println!("{:?}", x);
                         unreachable!()
                     }
                 }
@@ -477,7 +466,7 @@ impl BoardState {
                     Promotion::None => player.bishops |= 1 << last_move.from,
                     Promotion::Bishop => player.pawns |= 1 << last_move.from,
                     x => {
-                        println!("{:?}",x);
+                        println!("{:?}", x);
                         unreachable!()
                     }
                 }
@@ -488,7 +477,7 @@ impl BoardState {
                     Promotion::None => player.knights |= 1 << last_move.from,
                     Promotion::Knight => player.pawns |= 1 << last_move.from,
                     x => {
-                        println!("{:?}",x);
+                        println!("{:?}", x);
                         unreachable!()
                     }
                 }
@@ -500,7 +489,7 @@ impl BoardState {
                     Promotion::None => player.queens |= 1 << last_move.from,
                     Promotion::Queen => player.pawns |= 1 << last_move.from,
                     x => {
-                        println!("{:?}",x);
+                        println!("{:?}", x);
                         unreachable!()
                     }
                 }
@@ -509,10 +498,10 @@ impl BoardState {
                 player.king &= !(1 << last_move.to);
                 player.king |= 1 << last_move.from;
                 if last_move.to as i16 - last_move.from as i16 == 2 {
-                    player.rooks &= !(1 << last_move.to - 1);
-                    player.rooks |= 1 << (last_move.to - last_move.to % 8) + 7;
+                    player.rooks &= !(1 << (last_move.to - 1));
+                    player.rooks |= 1 << ((last_move.to - last_move.to % 8) + 7);
                 } else if last_move.to as i16 - last_move.from as i16 == -2 {
-                    player.rooks &= !(1 << last_move.to + 1);
+                    player.rooks &= !(1 << (last_move.to + 1));
                     player.rooks |= 1 << (last_move.to - last_move.to % 8);
                 }
 
@@ -524,7 +513,7 @@ impl BoardState {
                         let row = (player.king >> (56 - (i * 8))) as u8;
                         println!("{:08b}", row);
                     }
-                    eprintln!("");
+                    eprintln!();
                     for i in 0..=7u8 {
                         let row = (old_king >> (56 - (i * 8))) as u8;
                         println!("{:08b}", row);
@@ -563,6 +552,9 @@ impl BoardState {
         } else {
             (&self.white, &self.black)
         };
+
+        let all_player_pieces = player.all_pieces();
+        let all_opponent_pieces = opponent.all_pieces();
         let all_pieces = self.all_pieces();
         let king_square = player.king.ilog2() as usize;
         let attacked_squares: u64 = find_opponent_attacked_squares(
@@ -571,11 +563,11 @@ impl BoardState {
             &self.en_passant_target,
             self.active_player,
         );
-        let mut king_move = king_moves(king_square, player.all_pieces());
+        let mut king_move = king_moves(king_square, all_player_pieces);
         king_move = (king_move
             | king_castles(
                 king_square,
-                self.all_pieces(),
+                all_pieces,
                 player.king_castle,
                 player.queen_castle,
                 attacked_squares,
@@ -597,24 +589,24 @@ impl BoardState {
             0 => {}
             1 => {
                 capture_mask = checked_by;
-                push_mask = 0; 
+                push_mask = 0;
                 if checked_by & opponent.pawns != 0 {
                     if self.active_player == Player::Black {
                         if self.en_passant_target.targeted_square() & (opponent.pawns >> 8) != 0 {
                             en_passant_mask = self.en_passant_target.targeted_square();
                         }
-                    } else {
-                        if self.en_passant_target.targeted_square() & (opponent.pawns << 8) != 0 {
-                            en_passant_mask = self.en_passant_target.targeted_square();
-                        }
+                    } else if self.en_passant_target.targeted_square() & (opponent.pawns << 8) != 0
+                    {
+                        en_passant_mask = self.en_passant_target.targeted_square();
                     }
                 };
                 if (opponent.bishops | opponent.rooks | opponent.queens) & checked_by != 0 {
-                    if bishop_moves(checked_by.ilog2() as usize, all_pieces, 0) & player.king != 0 {
+                    let square_checked_by = checked_by.ilog2();
+                    if bishop_moves(square_checked_by as usize, all_pieces, 0) & player.king != 0 {
                         push_mask |= bishop_moves(king_square, all_pieces, all_pieces)
                             & bishop_moves(checked_by.ilog2() as usize, all_pieces, all_pieces)
                     }
-                    if rook_moves(checked_by.ilog2() as usize, all_pieces, 0) & player.king != 0 {
+                    if rook_moves(square_checked_by as usize, all_pieces, 0) & player.king != 0 {
                         push_mask |= rook_moves(king_square, all_pieces, all_pieces)
                             & rook_moves(checked_by.ilog2() as usize, all_pieces, all_pieces)
                     }
@@ -623,42 +615,43 @@ impl BoardState {
             _ => {
                 //after 50 turns without a capture or pawn move, *and* there is at least one legal move,
                 //the game is over by the fifty-move rule.
-                if self.half_counter >= 100 && move_index > 0{
-                    return move_list.as_mut_slice().split_at_mut(0).0
+                if self.half_counter >= 100 && move_index > 0 {
+                    return move_list.as_mut_slice().split_at_mut(0).0;
                 }
-            
+
                 //check self.move_stack. if there are more than 6 entries, and the last 6 are the same 2 moves repeated,
                 //the game is over by threefold repetition.
-                let x = self.move_stack.iter().rev().take(6).collect::<Box<[_]>>();
+                let mut x = self.move_stack.iter().rev().take(6);
                 if x.len() == 6 {
-                    let (move1, _) = x[0];
-                    let (move2, _) = x[1];
+                    let (move1, _) = x.next().unwrap();
+                    let (move2, _) = x.next().unwrap();
                     let mut is_draw = true;
-                    for (move_, data) in x.iter() {
-                        if data.capture != CapturedPiece::None || (move_ != move1 && move_ != move2) {
+                    for (move_, data) in x {
+                        if data.capture != CapturedPiece::None || (move_ != move1 && move_ != move2)
+                        {
                             is_draw = false;
                         }
                     }
                     if is_draw {
-                        return move_list.as_mut_slice().split_at_mut(0).0
+                        return move_list.as_mut_slice().split_at_mut(0).0;
                     }
                 }
-                return move_list.as_mut_slice().split_at_mut(move_index).0
-            },
+                return move_list.as_mut_slice().split_at_mut(move_index).0;
+            }
         }
         let pinned_pieces = king_pins_bishop(
             king_square,
-            player.all_pieces(),
+            all_player_pieces,
             all_pieces,
             opponent.bishops | opponent.queens,
         ) | king_pins_rook(
             king_square,
-            player.all_pieces(),
+            all_player_pieces,
             all_pieces,
             opponent.rooks | opponent.queens,
         );
         for rook in BitboardIterator::new(player.rooks) {
-            let mut moves = rook_moves(rook as usize, all_pieces, player.all_pieces())
+            let mut moves = rook_moves(rook as usize, all_pieces, all_player_pieces)
                 & (capture_mask | push_mask);
             if 1 << rook & pinned_pieces != 0 {
                 if bishop_moves(rook as usize, 0, 0) & player.king != 0 {
@@ -671,7 +664,7 @@ impl BoardState {
             insert_moves(rook, moves, move_list, &mut move_index);
         }
         for bishop in BitboardIterator::new(player.bishops) {
-            let mut moves = bishop_moves(bishop as usize, all_pieces, player.all_pieces())
+            let mut moves = bishop_moves(bishop as usize, all_pieces, all_player_pieces)
                 & (capture_mask | push_mask);
             if 1 << bishop & pinned_pieces != 0 {
                 if bishop_moves(bishop as usize, 0, 0) & player.king != 0 {
@@ -685,13 +678,13 @@ impl BoardState {
         }
         for knight in BitboardIterator::new(player.knights) {
             let moves =
-                knight_moves(knight as usize, player.all_pieces()) & (capture_mask | push_mask);
+                knight_moves(knight as usize, all_player_pieces) & (capture_mask | push_mask);
             if 1 << knight & pinned_pieces == 0 {
                 insert_moves(knight, moves, move_list, &mut move_index);
             }
         }
         for queen in BitboardIterator::new(player.queens) {
-            let mut moves = queen_moves(queen as usize, all_pieces, player.all_pieces())
+            let mut moves = queen_moves(queen as usize, all_pieces, all_player_pieces)
                 & (capture_mask | push_mask);
             if 1 << queen & pinned_pieces != 0 {
                 if bishop_moves(queen as usize, 0, 0) & player.king != 0 {
@@ -706,31 +699,29 @@ impl BoardState {
         for pawn in BitboardIterator::new(player.pawns) {
             let mut attacks = pawn_attacks(
                 1 << pawn,
-                opponent.all_pieces(),
+                all_opponent_pieces,
                 self.en_passant_target.clone(),
                 self.active_player,
             );
-            if attacks[0] & self.en_passant_target.targeted_square() != 0 {
-                if king_attacked_rooks(
+            if (attacks[0] & self.en_passant_target.targeted_square() != 0)
+                && king_attacked_rooks(
                     king_square,
                     (all_pieces | self.en_passant_target.targeted_square())
                         & !(1u64 << pawn | 1u64 << (pawn + 1)),
                     opponent.rooks | opponent.queens,
                 ) != 0
-                {
-                    attacks[0] &= !(self.en_passant_target.targeted_square());
-                }
+            {
+                attacks[0] &= !(self.en_passant_target.targeted_square());
             }
-            if attacks[1] & self.en_passant_target.targeted_square() != 0 {
-                if king_attacked_rooks(
+            if (attacks[1] & self.en_passant_target.targeted_square() != 0)
+                && king_attacked_rooks(
                     king_square,
                     (all_pieces | self.en_passant_target.targeted_square())
                         & !(1u64 << pawn | 1u64 << (pawn - 1)),
                     opponent.rooks | opponent.queens,
                 ) != 0
-                {
-                    attacks[1] &= !(self.en_passant_target.targeted_square());
-                }
+            {
+                attacks[1] &= !(self.en_passant_target.targeted_square());
             }
             let mut moves = (pawn_single_pushes(1u64 << pawn, all_pieces, self.active_player)
                 | pawn_double_pushes(1 << pawn, all_pieces, self.active_player)
@@ -755,60 +746,40 @@ impl BoardState {
                     }
                     != 0
                 {
-                    move_list[move_index] = Move::new(
-                        pawn,
-                        move_,
-                        Promotion::Knight,
-                    );
+                    move_list[move_index] = Move::new(pawn, move_, Promotion::Knight);
                     move_index += 1;
-                    move_list[move_index] = Move::new(
-                        pawn,
-                        move_,
-                        Promotion::Bishop,
-                    );
+                    move_list[move_index] = Move::new(pawn, move_, Promotion::Bishop);
                     move_index += 1;
-                    move_list[move_index] = Move::new(
-                        pawn,
-                        move_,
-                        Promotion::Rook,
-                    );
+                    move_list[move_index] = Move::new(pawn, move_, Promotion::Rook);
                     move_index += 1;
-                    move_list[move_index] = Move::new(
-                        pawn,
-                        move_,
-                        Promotion::Queen,
-                    );
+                    move_list[move_index] = Move::new(pawn, move_, Promotion::Queen);
                     move_index += 1;
                 } else {
-                    move_list[move_index] = Move::new(
-                        pawn,
-                        move_,
-                        Promotion::None,
-                    );
+                    move_list[move_index] = Move::new(pawn, move_, Promotion::None);
                     move_index += 1;
                 }
             }
         }
         //after 50 turns without a capture or pawn move, *and* there is at least one legal move,
         //the game is over by the fifty-move rule.
-        if self.half_counter >= 100 && move_index > 0{
-            return move_list.as_mut_slice().split_at_mut(0).0
+        if self.half_counter >= 100 && move_index > 0 {
+            return move_list.as_mut_slice().split_at_mut(0).0;
         }
 
         //check self.move_stack. if there are more than 6 entries, and the last 6 are the same 2 moves repeated,
         //the game is over by threefold repetition.
-        let x = self.move_stack.iter().rev().take(6).collect::<Box<[_]>>();
+        let mut x = self.move_stack.iter().rev().take(6);
         if x.len() == 6 {
-            let (move1, _) = x[0];
-            let (move2, _) = x[1];
+            let (move1, _) = x.next().unwrap();
+            let (move2, _) = x.next().unwrap();
             let mut is_draw = true;
-            for (move_, data) in x.iter() {
+            for (move_, data) in x {
                 if data.capture != CapturedPiece::None || (move_ != move1 && move_ != move2) {
                     is_draw = false;
                 }
             }
             if is_draw {
-                return move_list.as_mut_slice().split_at_mut(0).0
+                return move_list.as_mut_slice().split_at_mut(0).0;
             }
         }
         move_list.as_mut_slice().split_at_mut(move_index).0
@@ -827,10 +798,13 @@ impl BitboardIterator {
 impl Iterator for BitboardIterator {
     type Item = u8;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.0.count_ones() == 0 {return None}
-        let result = self.0.trailing_zeros() as u8;
-        self.0 &= !(1 << result);
-        Some(result)
+        if self.0 == 0 {
+            None
+        } else {
+            let result = self.0.trailing_zeros() as u8;
+            self.0 &= !(1 << result);
+            Some(result)
+        }
     }
 }
 
@@ -857,8 +831,8 @@ fn find_opponent_attacked_squares(
         .fold(0, |x, y| x | bishop_moves(y as usize, all_pieces, 0));
     attacked_squares |= BitboardIterator::new(opponent.queens)
         .fold(0, |x, y| x | queen_moves(y as usize, all_pieces, 0));
-    attacked_squares |= BitboardIterator::new(opponent.knights)
-        .fold(0, |x, y| x | knight_moves(y as usize, 0));
+    attacked_squares |=
+        BitboardIterator::new(opponent.knights).fold(0, |x, y| x | knight_moves(y as usize, 0));
     attacked_squares |= king_moves(opponent.king.ilog2() as usize, 0);
     attacked_squares |= pawn_attacked_squares[0] | pawn_attacked_squares[1];
     attacked_squares
@@ -900,6 +874,7 @@ fn pieces_checked_by(
         | pawns_attacking_king
 }
 
+#[inline(never)]
 fn insert_moves(piece: u8, moves: u64, move_list: &mut [Move; 218], move_index: &mut usize) {
     let move_squares = BitboardIterator::new(moves);
     for move_ in move_squares {
@@ -927,12 +902,10 @@ fn pawn_double_pushes(pawns: u64, all_pieces: u64, player: Player) -> u64 {
         } else {
             0
         }
+    } else if pawns & RANK_2 != 0 {
+        ((pawns & RANK_2) << 16) & (!all_pieces) & (!(all_pieces << 8))
     } else {
-        if pawns & RANK_2 != 0 {
-            ((pawns & RANK_2) << 16) & (!all_pieces) & (!(all_pieces << 8))
-        } else {
-            0
-        }
+        0
     }
 }
 ///attacks are stored in an array [west_attacks, east_attacks] from white's perspective
@@ -967,7 +940,7 @@ fn pawn_attacks(
 }
 
 fn king_moves(square: usize, friendly_pieces: u64) -> u64 {
-    crate::precomputed::precomputed::KING_MOVES[square] & !friendly_pieces
+    crate::precomputed::moves::KING_MOVES[square] & !friendly_pieces
 }
 
 fn king_castles(
@@ -979,19 +952,19 @@ fn king_castles(
 ) -> u64 {
     let mut result = 0;
     if king_castle
-        && (1u64 << square | 1u64 << square - 1 | 1u64 << square - 2) & attacked_squares == 0
+        && (1u64 << square | 1u64 << (square - 1) | 1u64 << (square - 2)) & attacked_squares == 0
         && (rook_moves(square, all_pieces, all_pieces)
             & rook_moves(square - 3, all_pieces, all_pieces))
-            .count_ones()
+        .count_ones()
             == 2
     {
         result |= 1 << ((square - square % 8) + 1);
     };
     if queen_castle
-        && (1u64 << square | 1u64 << square + 1 | 1u64 << square + 2) & attacked_squares == 0
+        && (1u64 << square | 1u64 << (square + 1) | 1u64 << (square + 2)) & attacked_squares == 0
         && (rook_moves(square, all_pieces, all_pieces)
             & rook_moves(square + 4, all_pieces, all_pieces))
-            .count_ones()
+        .count_ones()
             == 3
     {
         result |= 1 << ((square - square % 8) + 5);
@@ -1027,7 +1000,7 @@ fn king_attacked_bishops(king: usize, all_pieces: u64, bishops_and_queens: u64) 
     while index <= 63 && new_bishops_and_queens != 0 {
         new_bishops_and_queens = (bishops_and_queens >> index) & !1;
         let moves = bishop_moves(index as usize, 1 << king, 0);
-        if (moves & &(king_moves | 1 << king)).count_ones() > 0 && (moves) & (1 << king) != 0 {
+        if (moves & (king_moves | 1 << king)).count_ones() > 0 && (moves) & (1 << king) != 0 {
             let mask = moves & (king_moves | 1 << king);
             let masked_pieces = (all_pieces & !(1u64 << king)) & mask;
             if mask != 0 && masked_pieces.count_ones() == 0 {
@@ -1057,7 +1030,7 @@ fn king_pins_rook(
     while index <= 63 && new_rooks_and_queens != 0 {
         new_rooks_and_queens = (rooks_and_queens >> index) & !1;
         let moves = rook_moves(index as usize, 1 << king, 0);
-        if (moves & &(king_moves | 1 << king)).count_ones() > 0 && (moves) & (1 << king) != 0 {
+        if (moves & (king_moves | 1 << king)).count_ones() > 0 && (moves) & (1 << king) != 0 {
             let mask = moves & (king_moves | 1 << king);
             let masked_pieces = (all_pieces & !(1u64 << king)) & mask;
             if masked_pieces.count_ones() == 1
@@ -1085,7 +1058,7 @@ fn king_pins_bishop(
     while index <= 63 && new_bishops_and_queens != 0 {
         new_bishops_and_queens = (bishops_and_queens >> index) & !1;
         let moves = bishop_moves(index as usize, 1 << king, 0);
-        if (moves & &(king_moves | 1 << king)).count_ones() > 0 && (moves) & (1 << king) != 0 {
+        if (moves & (king_moves | 1 << king)).count_ones() > 0 && (moves) & (1 << king) != 0 {
             let mask = moves & (king_moves | 1 << king);
             let masked_pieces = (all_pieces & !(1u64 << king)) & mask;
             if masked_pieces.count_ones() == 1
@@ -1100,39 +1073,40 @@ fn king_pins_bishop(
 }
 
 fn knight_moves(square: usize, friendly_pieces: u64) -> u64 {
-    crate::precomputed::precomputed::KNIGHT_MOVES[square] & !friendly_pieces
+    crate::precomputed::moves::KNIGHT_MOVES[square] & !friendly_pieces
 }
 
 fn bishop_moves(square: usize, all_pieces: u64, friendly_pieces: u64) -> u64 {
     let magic = crate::precomputed::bishop_magic::BISHOP_MAGICS[square];
-    let blockers = all_pieces & crate::precomputed::precomputed::BISHOP_MASK[square];
-    let magic_index = crate::precomputed::magic_to_index(magic, blockers, 9);
+    let blockers = all_pieces & crate::precomputed::moves::BISHOP_MASK[square];
+    let magic_index = crate::precomputed::magic_to_index::<9>(magic, blockers);
     crate::precomputed::bishop_magic::BISHOP_ATTACKS[square][magic_index] & !friendly_pieces
 }
 
 fn rook_moves(square: usize, all_pieces: u64, friendly_pieces: u64) -> u64 {
     let magic = crate::precomputed::rook_magic::ROOK_MAGICS[square];
-    let blockers = all_pieces & crate::precomputed::precomputed::ROOK_MASK[square];
-    let magic_index = crate::precomputed::magic_to_index(magic, blockers, 12);
+    let blockers = all_pieces & crate::precomputed::moves::ROOK_MASK[square];
+    let magic_index = crate::precomputed::magic_to_index::<12>(magic, blockers);
     crate::precomputed::rook_magic::ROOK_ATTACKS[square][magic_index] & !friendly_pieces
 }
 
 fn queen_moves(square: usize, all_pieces: u64, friendly_pieces: u64) -> u64 {
-    bishop_moves(square, all_pieces, friendly_pieces) | rook_moves(square, all_pieces, friendly_pieces)
+    bishop_moves(square, all_pieces, friendly_pieces)
+        | rook_moves(square, all_pieces, friendly_pieces)
 }
 
 fn move_to_algebraic(move_: &Move, board: &BoardState) -> String {
-    static SQUARES: [&'static str; 64] = [
+    static SQUARES: [&str; 64] = [
         "h1", "g1", "f1", "e1", "d1", "c1", "b1", "a1", "h2", "g2", "f2", "e2", "d2", "c2", "b2",
         "a2", "h3", "g3", "f3", "e3", "d3", "c3", "b3", "a3", "h4", "g4", "f4", "e4", "d4", "c4",
         "b4", "a4", "h5", "g5", "f5", "e5", "d5", "c5", "b5", "a5", "h6", "g6", "f6", "e6", "d6",
         "c6", "b6", "a6", "h7", "g7", "f7", "e7", "d7", "c7", "b7", "a7", "h8", "g8", "f8", "e8",
         "d8", "c8", "b8", "a8",
     ];
-    static FILES: [&'static str; 8] = ["h", "g", "f", "e", "d", "c", "b", "a"];
-    static RANKS: [&'static str; 8] = ["1", "2", "3", "4", "5", "6", "7", "8"];
-    let file_mask = FILE_H << move_.from % 8;
-    let rank_mask = RANK_1 << move_.from / 8;
+    static FILES: [&str; 8] = ["h", "g", "f", "e", "d", "c", "b", "a"];
+    static RANKS: [&str; 8] = ["1", "2", "3", "4", "5", "6", "7", "8"];
+    let file_mask = FILE_H << (move_.from % 8);
+    let rank_mask = RANK_1 << (move_.from / 8);
     let mut rank = "";
     let mut file = "";
     let mut promotion = "";
@@ -1428,9 +1402,12 @@ pub fn perft_div(board: &mut BoardState, depth: u8) -> u64 {
         }
         return moves.len() as u64;
     };
-    let move_strings: Vec<_> = moves.iter().rev().map(|x| move_to_algebraic(x, board)).collect();
+    let move_strings: Vec<_> = moves
+        .iter()
+        .rev()
+        .map(|x| move_to_algebraic(x, board))
+        .collect();
     for (i, player_move) in moves.iter().rev().enumerate() {
-        
         board.make_move(*player_move);
         let result = perft(board, depth - 1);
         println!("{}: {}", move_strings[i], result);

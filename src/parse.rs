@@ -138,14 +138,15 @@ fn calculate_en_passant_target(
     match parsed_en_passant_target {
         "-" => Ok(None),
         x => {
-            let file = match x.chars().nth(0).map(File::try_from) {
+            let mut iter = x.chars();
+            let file = match iter.next().map(File::try_from) {
                 None => return Err(FenError::InvalidPosition),
                 Some(x) => match x {
                     Ok(rank) => rank,
                     Err(x) => return Err(FenError::InvalidRank(x)),
                 },
             };
-            let rank = match x.chars().nth(1).map(Rank::try_from) {
+            let rank = match iter.next().map(Rank::try_from) {
                 None => return Err(FenError::InvalidPosition),
                 Some(x) => match x {
                     Ok(file) => file,

@@ -1,5 +1,5 @@
+#[cfg(test)]
 use super::*;
-#[cfg(tests)]
 #[test]
 fn king_moves_empty_board() {
     let board = BoardState {
@@ -206,9 +206,9 @@ fn queen_moves_empty_board() {
     assert_eq!(queen_move, 0x0000000102040800);
 }
 
-use crate::gamestate::*;
 #[test]
 fn boardstate_new() {
+use crate::gamestate::*;
     let result = BoardState::new(ParsedGameState {
         piece_position: [
             ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
@@ -378,7 +378,6 @@ fn first_turn_legal_moves() {
     };
     let moves = board.generate_moves(&mut move_array);
     let x = moves.len();
-    dbg!(moves.iter().map(|move_| move_to_algebraic(move_, &board)).collect::<Vec<_>>());
     assert_eq!(x, 20);
 }
 
@@ -386,8 +385,9 @@ fn first_turn_legal_moves() {
 fn perft_test() {
     use crate::parse::fen_to_game;
     let parsed_state =
-        fen_to_game("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10").unwrap();
+        fen_to_game("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10")
+            .unwrap();
     let mut board = BoardState::new(parsed_state);
-    let first_3_ply_moves = perft_div(&mut board, 4);
+    let first_3_ply_moves = perft_div(&mut board, 6);
     println!("{:?}", first_3_ply_moves);
 }
