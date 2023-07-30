@@ -385,9 +385,11 @@ fn first_turn_legal_moves() {
 fn perft_test() {
     use crate::parse::fen_to_game;
     let parsed_state =
-        fen_to_game("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10")
+        fen_to_game("r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10 ")
             .unwrap();
     let mut board = BoardState::new(parsed_state);
     let first_3_ply_moves = perft_div(&mut board, 6);
-    println!("{:?}", first_3_ply_moves);
+    //todo!() still 30 extra moves to figure out
+    println!("{}", first_3_ply_moves);
+    //assert_eq!(first_3_ply_moves, 6923051137);
 }

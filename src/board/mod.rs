@@ -282,10 +282,12 @@ impl BoardState {
                 }
                 PieceType::Rook(_) => {
                     move_data.capture = CapturedPiece::Rook(to_move.to);
-                    if opponent.king_castle && opponent.king.ilog2() as u8 > to_move.to {
+                    if opponent.king_castle && opponent.king.ilog2() as u8 > to_move.to 
+                    && (opponent.king.ilog2() as u8)/8 == to_move.to/8 {
                         opponent.king_castle = false;
                     }
-                    if opponent.queen_castle && to_move.to > opponent.king.ilog2() as u8 {
+                    if opponent.queen_castle && to_move.to > opponent.king.ilog2() as u8
+                    && (opponent.king.ilog2() as u8)/8 == to_move.to/8 {
                         opponent.queen_castle = false;
                     }
                 }
@@ -433,7 +435,7 @@ impl BoardState {
 
         let moved_piece = self
             .find_piece_on_square(last_move.to)
-            .expect("cannot move from an empty square!");
+            .expect("cannot unmove from an empty square!");
 
         let (player, opponent) = if self.active_player == Player::Black {
             (&mut self.black, &mut self.white)
@@ -564,15 +566,7 @@ impl BoardState {
             self.active_player,
         );
         let mut king_move = king_moves(king_square, all_player_pieces);
-        king_move = (king_move
-            | king_castles(
-                king_square,
-                all_pieces,
-                player.king_castle,
-                player.queen_castle,
-                attacked_squares,
-            ))
-            & !attacked_squares;
+        king_move &= !attacked_squares;
         insert_moves(king_square as u8, king_move, move_list, &mut move_index);
         let checked_by = pieces_checked_by(
             all_pieces,
@@ -583,23 +577,22 @@ impl BoardState {
         );
         let mut capture_mask = 0xFFFFFFFFFFFFFFFFu64;
         let mut push_mask = 0xFFFFFFFFFFFFFFFFu64;
-        let mut en_passant_mask = 0x0u64;
 
         match checked_by.count_ones() {
-            0 => {}
+            0 => {
+                //can only castle if the king is not in check.
+                let castles = king_castles(
+                    king_square,
+                    all_pieces,
+                    player.king_castle,
+                    player.queen_castle,
+                    attacked_squares,
+                );
+                insert_moves(king_square as u8, castles, move_list, &mut move_index);
+            }
             1 => {
                 capture_mask = checked_by;
                 push_mask = 0;
-                if checked_by & opponent.pawns != 0 {
-                    if self.active_player == Player::Black {
-                        if self.en_passant_target.targeted_square() & (opponent.pawns >> 8) != 0 {
-                            en_passant_mask = self.en_passant_target.targeted_square();
-                        }
-                    } else if self.en_passant_target.targeted_square() & (opponent.pawns << 8) != 0
-                    {
-                        en_passant_mask = self.en_passant_target.targeted_square();
-                    }
-                };
                 if (opponent.bishops | opponent.rooks | opponent.queens) & checked_by != 0 {
                     let square_checked_by = checked_by.ilog2();
                     if bishop_moves(square_checked_by as usize, all_pieces, 0) & player.king != 0 {
@@ -650,116 +643,10 @@ impl BoardState {
             all_pieces,
             opponent.rooks | opponent.queens,
         );
-        for rook in BitboardIterator::new(player.rooks) {
-            let mut moves = rook_moves(rook as usize, all_pieces, all_player_pieces)
-                & (capture_mask | push_mask);
-            if 1 << rook & pinned_pieces != 0 {
-                if bishop_moves(rook as usize, 0, 0) & player.king != 0 {
-                    moves &= bishop_moves(king_square, 0, 0) & bishop_moves(rook as usize, 0, 0)
-                }
-                if rook_moves(rook as usize, 0, 0) & player.king != 0 {
-                    moves &= rook_moves(king_square, 0, 0) & rook_moves(rook as usize, 0, 0)
-                }
-            }
-            insert_moves(rook, moves, move_list, &mut move_index);
-        }
-        for bishop in BitboardIterator::new(player.bishops) {
-            let mut moves = bishop_moves(bishop as usize, all_pieces, all_player_pieces)
-                & (capture_mask | push_mask);
-            if 1 << bishop & pinned_pieces != 0 {
-                if bishop_moves(bishop as usize, 0, 0) & player.king != 0 {
-                    moves &= bishop_moves(king_square, 0, 0) & bishop_moves(bishop as usize, 0, 0)
-                }
-                if rook_moves(bishop as usize, 0, 0) & player.king != 0 {
-                    moves &= rook_moves(king_square, 0, 0) & rook_moves(bishop as usize, 0, 0)
-                }
-            }
-            insert_moves(bishop, moves, move_list, &mut move_index);
-        }
-        for knight in BitboardIterator::new(player.knights) {
-            let moves =
-                knight_moves(knight as usize, all_player_pieces) & (capture_mask | push_mask);
-            if 1 << knight & pinned_pieces == 0 {
-                insert_moves(knight, moves, move_list, &mut move_index);
-            }
-        }
-        for queen in BitboardIterator::new(player.queens) {
-            let mut moves = queen_moves(queen as usize, all_pieces, all_player_pieces)
-                & (capture_mask | push_mask);
-            if 1 << queen & pinned_pieces != 0 {
-                if bishop_moves(queen as usize, 0, 0) & player.king != 0 {
-                    moves &= bishop_moves(king_square, 0, 0) & bishop_moves(queen as usize, 0, 0)
-                }
-                if rook_moves(queen as usize, 0, 0) & player.king != 0 {
-                    moves &= rook_moves(king_square, 0, 0) & rook_moves(queen as usize, 0, 0)
-                }
-            }
-            insert_moves(queen, moves, move_list, &mut move_index);
-        }
-        for pawn in BitboardIterator::new(player.pawns) {
-            let mut attacks = pawn_attacks(
-                1 << pawn,
-                all_opponent_pieces,
-                self.en_passant_target.clone(),
-                self.active_player,
-            );
-            if (attacks[0] & self.en_passant_target.targeted_square() != 0)
-                && king_attacked_rooks(
-                    king_square,
-                    (all_pieces | self.en_passant_target.targeted_square())
-                        & !(1u64 << pawn | 1u64 << (pawn + 1)),
-                    opponent.rooks | opponent.queens,
-                ) != 0
-            {
-                attacks[0] &= !(self.en_passant_target.targeted_square());
-            }
-            if (attacks[1] & self.en_passant_target.targeted_square() != 0)
-                && king_attacked_rooks(
-                    king_square,
-                    (all_pieces | self.en_passant_target.targeted_square())
-                        & !(1u64 << pawn | 1u64 << (pawn - 1)),
-                    opponent.rooks | opponent.queens,
-                ) != 0
-            {
-                attacks[1] &= !(self.en_passant_target.targeted_square());
-            }
-            let mut moves = (pawn_single_pushes(1u64 << pawn, all_pieces, self.active_player)
-                | pawn_double_pushes(1 << pawn, all_pieces, self.active_player)
-                | attacks[0]
-                | attacks[1])
-                & (capture_mask | push_mask | en_passant_mask);
-            if 1 << pawn & pinned_pieces != 0 {
-                if bishop_moves(pawn as usize, 0, 0) & player.king != 0 {
-                    moves &= bishop_moves(king_square, 0, 0) & bishop_moves(pawn as usize, 0, 0)
-                }
-                if rook_moves(pawn as usize, 0, 0) & player.king != 0 {
-                    moves &= rook_moves(king_square, 0, 0) & rook_moves(pawn as usize, 0, 0)
-                }
-            }
-            let move_squares = BitboardIterator::new(moves);
-            for move_ in move_squares {
-                if (1u64 << move_)
-                    & if self.active_player == Player::Black {
-                        0xFF
-                    } else {
-                        0xFF00000000000000
-                    }
-                    != 0
-                {
-                    move_list[move_index] = Move::new(pawn, move_, Promotion::Knight);
-                    move_index += 1;
-                    move_list[move_index] = Move::new(pawn, move_, Promotion::Bishop);
-                    move_index += 1;
-                    move_list[move_index] = Move::new(pawn, move_, Promotion::Rook);
-                    move_index += 1;
-                    move_list[move_index] = Move::new(pawn, move_, Promotion::Queen);
-                    move_index += 1;
-                } else {
-                    move_list[move_index] = Move::new(pawn, move_, Promotion::None);
-                    move_index += 1;
-                }
-            }
-        }
+
+        generate_sliding_moves(player, all_pieces, all_player_pieces, capture_mask, push_mask, pinned_pieces, king_square, move_list, &mut move_index);
+        generate_knight_moves(player, all_player_pieces, capture_mask, push_mask, pinned_pieces, move_list, &mut move_index);
+        generate_pawn_moves(player, opponent, king_square, all_pieces, all_opponent_pieces, &self.en_passant_target, self.active_player, capture_mask, push_mask, pinned_pieces, move_list, &mut move_index);
         //after 50 turns without a capture or pawn move, *and* there is at least one legal move,
         //the game is over by the fifty-move rule.
         if self.half_counter >= 100 && move_index > 0 {
@@ -836,6 +723,166 @@ fn find_opponent_attacked_squares(
     attacked_squares |= king_moves(opponent.king.ilog2() as usize, 0);
     attacked_squares |= pawn_attacked_squares[0] | pawn_attacked_squares[1];
     attacked_squares
+}
+
+fn generate_sliding_moves(player: &PlayerState, all_pieces: u64, all_player_pieces: u64, capture_mask: u64, push_mask: u64, pinned_pieces: u64, king_square: usize, move_list: &mut [Move;218], move_index: &mut usize) {
+    for rook in BitboardIterator::new(player.rooks) {
+        let mut moves = rook_moves(rook as usize, all_pieces, all_player_pieces)
+            & (capture_mask | push_mask);
+        if 1 << rook & pinned_pieces != 0 {
+            if bishop_moves(rook as usize, 0, 0) & player.king != 0 {
+                moves &= bishop_moves(king_square, 0, 0) & bishop_moves(rook as usize, 0, 0)
+            }
+            if rook_moves(rook as usize, 0, 0) & player.king != 0 {
+                moves &= rook_moves(king_square, 0, 0) & rook_moves(rook as usize, 0, 0)
+            }
+        }
+        insert_moves(rook, moves, move_list, move_index);
+    }
+    for bishop in BitboardIterator::new(player.bishops) {
+        let mut moves = bishop_moves(bishop as usize, all_pieces, all_player_pieces)
+            & (capture_mask | push_mask);
+        if 1 << bishop & pinned_pieces != 0 {
+            if bishop_moves(bishop as usize, 0, 0) & player.king != 0 {
+                moves &= bishop_moves(king_square, 0, 0) & bishop_moves(bishop as usize, 0, 0)
+            }
+            if rook_moves(bishop as usize, 0, 0) & player.king != 0 {
+                moves &= rook_moves(king_square, 0, 0) & rook_moves(bishop as usize, 0, 0)
+            }
+        }
+        insert_moves(bishop, moves, move_list, move_index);
+    }
+    for queen in BitboardIterator::new(player.queens) {
+        let mut moves = queen_moves(queen as usize, all_pieces, all_player_pieces)
+            & (capture_mask | push_mask);
+        if 1 << queen & pinned_pieces != 0 {
+            if bishop_moves(queen as usize, 0, 0) & player.king != 0 {
+                moves &= bishop_moves(king_square, 0, 0) & bishop_moves(queen as usize, 0, 0)
+            }
+            if rook_moves(queen as usize, 0, 0) & player.king != 0 {
+                moves &= rook_moves(king_square, 0, 0) & rook_moves(queen as usize, 0, 0)
+            }
+        }
+        insert_moves(queen, moves, move_list, move_index);
+    }
+}
+
+fn generate_knight_moves(player: &PlayerState, all_player_pieces: u64, capture_mask: u64, push_mask: u64, pinned_pieces: u64, move_list: &mut [Move; 218], move_index:&mut usize) {
+    for knight in BitboardIterator::new(player.knights) {
+        let moves =
+            knight_moves(knight as usize, all_player_pieces) & (capture_mask | push_mask);
+        if 1 << knight & pinned_pieces == 0 {
+            insert_moves(knight, moves, move_list, move_index);
+        }
+    }
+}
+
+fn pawn_promotion_moves(pawn: u8, move_: u8, move_list: &mut [Move; 218], move_index: &mut usize, active_player: Player) {
+    if (1u64 << move_)
+            & if active_player == Player::Black {
+                0xFF
+            } else {
+                0xFF00000000000000
+            }
+            != 0
+        {
+            move_list[*move_index] = Move::new(pawn, move_, Promotion::Knight);
+            *move_index += 1;
+            move_list[*move_index] = Move::new(pawn, move_, Promotion::Bishop);
+            *move_index += 1;
+            move_list[*move_index] = Move::new(pawn, move_, Promotion::Rook);
+            *move_index += 1;
+            move_list[*move_index] = Move::new(pawn, move_, Promotion::Queen);
+            *move_index += 1;
+        } else {
+            move_list[*move_index] = Move::new(pawn, move_, Promotion::None);
+            *move_index += 1;
+        }
+}
+//todo!: ensure that all moves that could go to edge of board generate proper promotions!
+fn generate_pawn_moves(player: &PlayerState, opponent: &PlayerState, king_square: usize, all_pieces: u64, all_opponent_pieces: u64, en_passant_target: &EnPassantTarget, active_player: Player,capture_mask: u64, push_mask: u64, pinned_pieces: u64, move_list: &mut [Move; 218], move_index: &mut usize) {
+    let mut pawns = player.pawns;
+    let pinned_pawns = pawns & pinned_pieces;
+    let offset: i8 = match active_player {
+        Player::Black => 8,
+        Player::White => -8
+    };
+    if pinned_pawns != 0 {
+        pawns &= !pinned_pawns;
+        let bishop_pin_mask = bishop_moves(king_square, 0, 0);
+        if pinned_pawns & bishop_pin_mask != 0 {
+            let mut attacks = pawn_attacks(pinned_pawns, all_opponent_pieces, en_passant_target.clone(), active_player);
+            attacks[0] &= bishop_pin_mask & (capture_mask | push_mask);
+            attacks[1] &= bishop_pin_mask & (capture_mask | push_mask);
+            if attacks[0] != 0 {
+                for move_ in BitboardIterator::new(attacks[0]) {
+                    let pawn = (move_ as i8 + (offset - 1)) as u8;
+                    pawn_promotion_moves(pawn, move_, move_list, move_index, active_player);
+                }
+            }
+            if attacks[1] != 0 {
+                for move_ in BitboardIterator::new(attacks[1]) {
+                    let pawn = (move_ as i8 + (offset + 1)) as u8;
+                        pawn_promotion_moves(pawn, move_, move_list, move_index, active_player);
+                }
+            }
+        }
+        let rook_pin_mask = rook_moves(king_square, 0, 0);
+        if pinned_pawns & rook_pin_mask != 0 {
+            let push = pawn_single_pushes(pinned_pawns, all_pieces, active_player) & rook_pin_mask & (capture_mask | push_mask);
+            if push != 0 {
+                for move_ in BitboardIterator::new(push) {
+                    let pawn = (move_ as i8 + offset) as u8;
+                    pawn_promotion_moves(pawn, move_, move_list, move_index, active_player);
+                }
+            }
+            let double_push = pawn_double_pushes(pinned_pawns, all_pieces, active_player) & rook_pin_mask & (capture_mask | push_mask);
+            if double_push != 0 {
+                for move_ in BitboardIterator::new(double_push) {
+                    let pawn = (move_ as i8 + offset*2) as u8;
+                    pawn_promotion_moves(pawn, move_, move_list, move_index, active_player);
+                }
+            }
+        }
+    }
+    let mut attacks = pawn_attacks(pawns, all_opponent_pieces, en_passant_target.clone(), active_player);
+    
+    if attacks[0] & en_passant_target.targeted_square() != 0 {
+        let removed_pieces = (1u64 << (en_passant_target.targeted_square().ilog2() as i8 + offset)) + (1u64 << (en_passant_target.targeted_square().ilog2() as i8 + offset - 1));
+        //todo!() some kind of issue here? not sure how the king can see rooks/queens here?
+        if rook_moves(king_square, all_pieces & !removed_pieces, player.all_pieces() & !removed_pieces) & (opponent.rooks | opponent.queens) != 0 {
+            attacks[0] &= !en_passant_target.targeted_square();
+        }
+    }
+    if attacks[1] & en_passant_target.targeted_square() != 0 {
+        let removed_pieces = (1u64 << (en_passant_target.targeted_square().ilog2() as i8 + offset)) + 1u64 << (en_passant_target.targeted_square().ilog2() as i8 + offset + 1);
+        if rook_moves(king_square, all_pieces & !removed_pieces, player.all_pieces() & !removed_pieces) & (opponent.rooks | opponent.queens) != 0 {
+            attacks[1] &= !en_passant_target.targeted_square();
+        }
+    }
+    let single_pushes = pawn_single_pushes(pawns, all_pieces, active_player) & push_mask;
+    let double_pushes = pawn_double_pushes(pawns, all_pieces, active_player) & push_mask;
+    let west_attacks = BitboardIterator::new(attacks[0] & capture_mask);
+    let east_attacks = BitboardIterator::new(attacks[1] & capture_mask);
+    let pushes = BitboardIterator::new(single_pushes);
+    let double_pushes = BitboardIterator::new(double_pushes);
+    
+    for move_ in west_attacks {
+        let pawn = (move_ as i8 + (offset - 1)) as u8;
+        pawn_promotion_moves(pawn, move_, move_list, move_index, active_player);
+    }
+    for move_ in east_attacks {
+        let pawn = (move_ as i8 + (offset + 1)) as u8;
+        pawn_promotion_moves(pawn, move_, move_list, move_index, active_player);
+    }
+    for move_ in pushes {
+        let pawn = (move_ as i8 + offset) as u8;
+        pawn_promotion_moves(pawn, move_, move_list, move_index, active_player);
+    }
+    for move_ in double_pushes {
+        let pawn = (move_ as i8 + offset*2) as u8;
+        pawn_promotion_moves(pawn, move_, move_list, move_index, active_player);
+    }
 }
 
 fn pieces_checked_by(
@@ -1408,9 +1455,10 @@ pub fn perft_div(board: &mut BoardState, depth: u8) -> u64 {
         .map(|x| move_to_algebraic(x, board))
         .collect();
     for (i, player_move) in moves.iter().rev().enumerate() {
+        print!("{}: ", move_strings[i]);
         board.make_move(*player_move);
         let result = perft(board, depth - 1);
-        println!("{}: {}", move_strings[i], result);
+        println!("{}", result);
         move_count += result;
         board.unmake_last_move();
     }
