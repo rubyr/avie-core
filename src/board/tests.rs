@@ -29,7 +29,7 @@ fn king_moves_empty_board() {
         half_counter: 0,
         move_stack: vec![],
     };
-    let king_move = king_moves(board.white.king.ilog2() as usize, board.white.all_pieces());
+    let king_move = king_moves(board.white.king.ilog2() as u8, board.white.all_pieces());
     assert_eq!(king_move, 0x00001C141C000000);
     let board = BoardState {
         white: PlayerState {
@@ -58,7 +58,7 @@ fn king_moves_empty_board() {
         half_counter: 0,
         move_stack: vec![],
     };
-    let king_move = king_moves(board.white.king.ilog2() as usize, board.white.all_pieces());
+    let king_move = king_moves(board.white.king.ilog2() as u8, board.white.all_pieces());
     assert_eq!(king_move, 0x0000030203000000);
     let board = BoardState {
         white: PlayerState {
@@ -87,7 +87,7 @@ fn king_moves_empty_board() {
         half_counter: 0,
         move_stack: vec![],
     };
-    let king_move = king_moves(board.white.king.ilog2() as usize, board.white.all_pieces());
+    let king_move = king_moves(board.white.king.ilog2() as u8, board.white.all_pieces());
     assert_eq!(king_move, 0x0000C040C0000000);
     //for i in 0..=7u8 {
     //    let row = (king_move >> (56 - (i * 8))) as u8;
@@ -124,7 +124,7 @@ fn king_moves_bongcloud() {
         full_counter: 2,
         move_stack: vec![],
     };
-    let king_move = king_moves(board.white.king.ilog2() as usize, board.white.all_pieces());
+    let king_move = king_moves(board.white.king.ilog2() as u8, board.white.all_pieces());
     assert_eq!(king_move, 0x0000000000000800);
 }
 
@@ -163,7 +163,7 @@ fn knight_moves_empty_board() {
     let mut moves = vec![];
     while index <= 63 && new_knights != 0 {
         new_knights = (new_knights >> index) & !1;
-        moves.push(knight_moves(index as usize, friendly_pieces));
+        moves.push(knight_moves(index as u8, friendly_pieces));
         index += new_knights.trailing_zeros();
     }
     assert_eq!(moves, vec![0x0000142200221400u64, 0x0020400000000000u64]);
@@ -199,7 +199,7 @@ fn queen_moves_empty_board() {
         move_stack: vec![],
     };
     let queen_move = queen_moves(
-        board.white.queens.ilog2() as usize,
+        board.white.queens.ilog2() as u8,
         board.all_pieces(),
         board.white.all_pieces(),
     );
@@ -321,7 +321,7 @@ fn king_rook_pins() {
     let rooks = 0x0800000081000000u64;
     let enemy = 0x08000000C1000000u64;
     let friendly = 0x000800001C000000u64;
-    let result = king_pins_rook(king.ilog2() as usize, friendly, enemy | friendly, rooks);
+    let result = king_pins_rook(king.ilog2() as u8, friendly, enemy | friendly, rooks);
     assert_eq!(result, 0x0008000004000000);
 }
 /// 10000000
@@ -338,7 +338,7 @@ fn king_bishop_pins() {
     let bishops = 0x8001000000000001u64;
     let enemy = 0x8001020000000001u64;
     let friendly = 0x0000001408000200u64;
-    let result = king_pins_bishop(king.ilog2() as usize, friendly, enemy | friendly, bishops);
+    let result = king_pins_bishop(king.ilog2() as u8, friendly, enemy | friendly, bishops);
     assert_eq!(result, 0x0000001000000200);
 }
 

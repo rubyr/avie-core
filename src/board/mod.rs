@@ -1,5 +1,8 @@
-use crate::gamestate::{File, ParsedGameState, Player, Rank};
+use crate::gamestate::{File, Player, Rank};
 mod tests;
+mod representation;
+
+use crate::board::representation::*;
 static FILE_A: u64 = 0x8080808080808080u64;
 static NOT_FILE_A: u64 = !FILE_A;
 static NOT_FILE_H: u64 = !FILE_H;
@@ -7,670 +10,13 @@ static FILE_H: u64 = 0x0101010101010101u64;
 static RANK_1: u64 = 0x00000000000000FFu64;
 static RANK_2: u64 = 0x000000000000FF00u64;
 static RANK_7: u64 = 0x00FF000000000000u64;
-#[derive(Clone, PartialEq, Eq, Debug)]
-struct PlayerState {
-    king: u64,
-    queens: u64,
-    bishops: u64,
-    knights: u64,
-    rooks: u64,
-    pawns: u64,
-    king_castle: bool,
-    queen_castle: bool,
-}
 
-impl PlayerState {
-    ///function uses a quirk of binary representation to verify that there are no duplicate pieces on the board.
-    /// when no bits are shared between two numbers, addition gives the same result as binary OR. by adding all
-    /// bitboards together and comparing with all bitboards OR'd together, we can ensure that a player's state is valid.
-    fn is_valid(&self) -> bool {
-        let mut valid = self.king.count_ones() == 1;
-        let add_board: u128 = self.king as u128
-            + self.queens as u128
-            + self.bishops as u128
-            + self.knights as u128
-            + self.rooks as u128
-            + self.pawns as u128;
-        valid &= add_board == self.all_pieces() as u128;
-        valid
+pub fn u64_to_board(board: u64) {
+    for i in 0..8 {
+        let row = (board >> (56 - (i * 8))) as u8;
+        println!("{:08b}", row);
     }
-    fn all_pieces(&self) -> u64 {
-        self.king | self.queens | self.bishops | self.knights | self.rooks | self.pawns
-    }
-}
-
-///En Passant Target representation:
-///  0bX0000000: active flag. if 1, there was no en passant on the previous turn, and all other bits are ignored.
-///  0b0X000000: player flag. 0 for white, 1 for black.
-///  0b00XXXXXX: square of valid en passant target. bitboard is obtained by shifting 1u64 by this value.
-#[derive(Clone, PartialEq, Eq, Debug)]
-struct EnPassantTarget(u8);
-static EN_PASSANT_NO_SQUARE: u8 = 0b10000000;
-static EN_PASSANT_SQUARE_MASK: u8 = 0b00111111;
-
-impl EnPassantTarget {
-    fn targeted_player(&self) -> Option<Player> {
-        match self.0 >> 6 {
-            0 => Some(Player::White),
-            1 => Some(Player::Black),
-            //all other values mean there is no en passant target
-            _ => None,
-        }
-    }
-    fn targeted_square(&self) -> u64 {
-        if self.0 & EN_PASSANT_NO_SQUARE != 0 {
-            return 0;
-        }
-        1u64 << (self.0 & EN_PASSANT_SQUARE_MASK)
-    }
-}
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub enum CapturedPiece {
-    None,
-    Pawn(u8),
-    Knight(u8),
-    Bishop(u8),
-    Rook(u8),
-    Queen(u8),
-}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct UnmakeMoveData {
-    castling_rights: crate::gamestate::CastlingRights,
-    capture: CapturedPiece,
-    en_passant: EnPassantTarget,
-    halfmove_clock: u8,
-}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct BoardState {
-    black: PlayerState,
-    white: PlayerState,
-    en_passant_target: EnPassantTarget,
-    active_player: Player,
-    half_counter: u8,
-    full_counter: u32, //pretty sure it's impossible to have a chess game go longer than 4 billion moves, but we'll see
-    move_stack: Vec<(Move, UnmakeMoveData)>,
-}
-
-fn into_bitboard(matched_char: char, board: &[[char; 8]; 8]) -> u64 {
-    let board: &[char; 64] = unsafe { std::mem::transmute(board) };
-    let bool_board = board.map(|x| x == matched_char);
-    bool_board
-        .iter()
-        .fold(0u64, |result, &x| (result << 1) ^ x as u64)
-}
-
-fn player_from_gamestate(player: Player, gamestate: &ParsedGameState) -> PlayerState {
-    let board = &gamestate.piece_position;
-    let (chars, king_castle, queen_castle) = if player == Player::Black {
-        (
-            ['r', 'b', 'n', 'q', 'k', 'p'],
-            gamestate.castling_rights.black_kingside,
-            gamestate.castling_rights.black_queenside,
-        )
-    } else {
-        (
-            ['R', 'B', 'N', 'Q', 'K', 'P'],
-            gamestate.castling_rights.white_kingside,
-            gamestate.castling_rights.white_queenside,
-        )
-    };
-    let rooks = into_bitboard(chars[0], board);
-    let bishops = into_bitboard(chars[1], board);
-    let knights = into_bitboard(chars[2], board);
-    let queens = into_bitboard(chars[3], board);
-    let king = into_bitboard(chars[4], board);
-    let pawns = into_bitboard(chars[5], board);
-    PlayerState {
-        rooks,
-        bishops,
-        knights,
-        queens,
-        king,
-        pawns,
-        king_castle,
-        queen_castle,
-    }
-}
-
-#[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Promotion {
-    None,
-    Knight,
-    Bishop,
-    Rook,
-    Queen,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Move {
-    from: u8,
-    to: u8,
-    promotion: Promotion, //0: no promotion, 1: knight, 2: bishop, 3: rook, 4: queen
-}
-
-impl Move {
-    fn new(from: u8, to: u8, promotion: Promotion) -> Move {
-        Move {
-            from,
-            to,
-            promotion,
-        }
-    }
-}
-
-fn en_passant_target(target: &Option<(File, Rank)>) -> EnPassantTarget {
-    match target {
-        None => EnPassantTarget(EN_PASSANT_NO_SQUARE),
-        Some((file, rank)) => {
-            let playermask = if *rank == Rank::Six { 1u8 << 6 } else { 0u8 };
-            let square: u8 = (7 - *file as u8) + (*rank as u8 * 8);
-            EnPassantTarget(playermask | square)
-        }
-    }
-}
-#[derive(Debug, Clone, Copy)]
-enum PieceType {
-    Pawn(Player),
-    Rook(Player),
-    Knight(Player),
-    Bishop(Player),
-    Queen(Player),
-    King(Player),
-}
-
-macro_rules! match_bits {
-    ($square: ident) => {
-       None
-    };
-    ($square: ident, $compared: expr => $result: expr) => {
-        if $square & $compared != 0 {Some($result)} else {match_bits!{$square}}
-    };
-    ($square: ident, $compared: expr => $result: expr,) => {
-        if $square & $compared != 0 {Some($result)} else {match_bits!{$square}}
-    };
-    ($square: ident, $compared: expr => $result: expr, $($rest:tt)*) => {
-        if $square & $compared != 0 {Some($result)} else {match_bits!{$square, $($rest)*}}
-    }
-}
-
-impl BoardState {
-    pub fn new(game: ParsedGameState) -> Self {
-        let black = player_from_gamestate(Player::Black, &game);
-        let white = player_from_gamestate(Player::White, &game);
-        let en_passant_target = en_passant_target(&game.en_passant_target);
-        let result = Self {
-            black,
-            white,
-            en_passant_target,
-            active_player: game.active_player,
-            half_counter: game.half_turn_clock,
-            full_counter: game.full_turn_clock,
-            move_stack: vec![],
-        };
-        debug_assert!(result.is_valid());
-        result
-    }
-
-    fn is_valid(&self) -> bool {
-        self.white.is_valid() & self.black.is_valid()
-    }
-
-    fn all_pieces(&self) -> u64 {
-        self.black.all_pieces() | self.white.all_pieces()
-    }
-
-    fn find_piece_on_square(&self, square: u8) -> Option<PieceType> {
-        let square_board: u64 = 1 << square;
-        match_bits! {
-            square_board,
-            self.white.pawns => PieceType::Pawn(Player::White),
-            self.white.bishops => PieceType::Bishop(Player::White),
-            self.white.knights => PieceType::Knight(Player::White),
-            self.white.rooks => PieceType::Rook(Player::White),
-            self.white.queens => PieceType::Queen(Player::White),
-            self.white.king => PieceType::King(Player::White),
-            self.black.pawns => PieceType::Pawn(Player::Black),
-            self.black.bishops => PieceType::Bishop(Player::Black),
-            self.black.knights => PieceType::Knight(Player::Black),
-            self.black.rooks => PieceType::Rook(Player::Black),
-            self.black.queens => PieceType::Queen(Player::Black),
-            self.black.king => PieceType::King(Player::Black),
-        }
-    }
-
-    fn make_move(&mut self, to_move: Move) {
-        let mut move_data = UnmakeMoveData {
-            castling_rights: crate::gamestate::CastlingRights {
-                black_kingside: self.black.king_castle,
-                black_queenside: self.black.queen_castle,
-                white_kingside: self.white.king_castle,
-                white_queenside: self.white.queen_castle,
-            },
-            capture: CapturedPiece::None,
-            en_passant: self.en_passant_target.clone(),
-            halfmove_clock: self.half_counter,
-        };
-        let moved_piece = self
-            .find_piece_on_square(to_move.from)
-            .expect("cannot move from an empty square!");
-        let captured_piece = self.find_piece_on_square(to_move.to);
-        let (player, opponent) = match self.active_player {
-            Player::Black => (&mut self.black, &mut self.white),
-            Player::White => (&mut self.white, &mut self.black),
-        };
-        let old_king = player.king;
-        if (1 << to_move.to) & self.en_passant_target.targeted_square() != 0 {
-            if let Some(player) = self.en_passant_target.targeted_player() {
-                if let PieceType::Pawn(_) = moved_piece {
-                    if self.active_player != player {
-                        let pawn_square = if player == Player::Black {
-                            to_move.to - 8
-                        } else {
-                            to_move.to + 8
-                        };
-                        move_data.capture = CapturedPiece::Pawn(pawn_square);
-                    }
-                }
-            }
-        } else if let Some(captured_piece) = captured_piece {
-            match captured_piece {
-                PieceType::Pawn(_) => {
-                    move_data.capture = CapturedPiece::Pawn(to_move.to);
-                }
-                PieceType::Rook(_) => {
-                    move_data.capture = CapturedPiece::Rook(to_move.to);
-                    if opponent.king_castle && opponent.king.ilog2() as u8 > to_move.to 
-                    && (opponent.king.ilog2() as u8)/8 == to_move.to/8 {
-                        opponent.king_castle = false;
-                    }
-                    if opponent.queen_castle && to_move.to > opponent.king.ilog2() as u8
-                    && (opponent.king.ilog2() as u8)/8 == to_move.to/8 {
-                        opponent.queen_castle = false;
-                    }
-                }
-                PieceType::Bishop(_) => {
-                    move_data.capture = CapturedPiece::Bishop(to_move.to);
-                }
-                PieceType::Knight(_) => move_data.capture = CapturedPiece::Knight(to_move.to),
-                PieceType::Queen(_) => move_data.capture = CapturedPiece::Queen(to_move.to),
-                PieceType::King(_) => {
-                    panic!()
-                }
-            }
-        }
-        match move_data.capture {
-            CapturedPiece::None => self.half_counter += 1,
-            CapturedPiece::Pawn(square) => {
-                opponent.pawns &= !(1 << square);
-                self.half_counter = 0;
-            }
-            CapturedPiece::Rook(square) => {
-                opponent.rooks &= !(1 << square);
-                self.half_counter = 0;
-            }
-            CapturedPiece::Bishop(square) => {
-                opponent.bishops &= !(1 << square);
-                self.half_counter = 0;
-            }
-            CapturedPiece::Knight(square) => {
-                opponent.knights &= !(1 << square);
-                self.half_counter = 0;
-            }
-            CapturedPiece::Queen(square) => {
-                opponent.queens &= !(1 << square);
-                self.half_counter = 0;
-            }
-        }
-        match moved_piece {
-            PieceType::Pawn(_) => {
-                //0: no promotion, 1: knight, 2: bishop, 3: rook, 4: queen
-                player.pawns &= !(1 << to_move.from);
-                match to_move.promotion {
-                    Promotion::None => player.pawns |= 1 << to_move.to,
-                    Promotion::Knight => player.knights |= 1 << to_move.to,
-                    Promotion::Bishop => player.bishops |= 1 << to_move.to,
-                    Promotion::Rook => player.rooks |= 1 << to_move.to,
-                    Promotion::Queen => player.queens |= 1 << to_move.to,
-                }
-                self.half_counter = 0;
-            }
-            PieceType::Rook(_) => {
-                player.rooks &= !(1 << to_move.from);
-                player.rooks |= 1 << to_move.to;
-                if to_move.from as i16 - player.king.ilog2() as i16 > 0 {
-                    player.queen_castle = false;
-                } else {
-                    player.king_castle = false;
-                }
-            }
-            PieceType::Knight(_) => {
-                player.knights &= !(1 << to_move.from);
-                player.knights |= 1 << to_move.to;
-            }
-            PieceType::Bishop(_) => {
-                player.bishops &= !(1 << to_move.from);
-                player.bishops |= 1 << to_move.to;
-            }
-            PieceType::Queen(_) => {
-                player.queens &= !(1 << to_move.from);
-                player.queens |= 1 << to_move.to;
-            }
-            PieceType::King(active_player) => {
-                if player.king_castle && 1 << to_move.to & 0x0200000000000002u64 != 0 {
-                    player.rooks &= !(0x0100000000000001);
-                    player.rooks |= 1 << (to_move.to + 1);
-                }
-                if player.queen_castle && 1 << to_move.to & 0x2000000000000020u64 != 0 {
-                    player.rooks &= !(0x8000000000000080);
-                    player.rooks |= 1 << (to_move.to - 1);
-                }
-                player.king &= !(1 << to_move.from);
-                player.king |= 1 << to_move.to;
-
-                player.queen_castle = false;
-                player.king_castle = false;
-                if player.king.count_ones() != 1 {
-                    eprintln!("active player: {:?}", active_player);
-                    eprintln!("actual active player: {:?}", self.active_player);
-                    eprintln!("kings: {}", player.king.count_ones());
-                    for i in 0..=7u8 {
-                        let row = (player.king >> (56 - (i * 8))) as u8;
-                        eprintln!("{:08b}", row);
-                    }
-                    eprintln!();
-                    for i in 0..=7u8 {
-                        let row = (old_king >> (56 - (i * 8))) as u8;
-                        eprintln!("{:08b}", row);
-                    }
-                    //println!("move string: {}", move_str);
-                    eprintln!("move struct: {:?}", to_move);
-                    eprintln!("{:?}", self.move_stack);
-                    panic!();
-                }
-            }
-        }
-
-        match moved_piece {
-            PieceType::Pawn(_) => {
-                if to_move.from.abs_diff(to_move.to) == 16 {
-                    self.en_passant_target = EnPassantTarget(
-                        0x40 * (self.active_player == Player::Black) as u8
-                            + ((to_move.from + to_move.to) / 2),
-                    );
-                } else {
-                    self.en_passant_target = EnPassantTarget(EN_PASSANT_NO_SQUARE);
-                }
-            }
-            _ => self.en_passant_target = EnPassantTarget(EN_PASSANT_NO_SQUARE),
-        };
-        self.active_player = if self.active_player == Player::Black {
-            Player::White
-        } else {
-            Player::Black
-        };
-        self.full_counter += if self.active_player == Player::Black {
-            1
-        } else {
-            0
-        };
-        self.move_stack.push((to_move, move_data))
-    }
-
-    fn unmake_last_move(&mut self) {
-        if self.move_stack.last().is_none() {
-            return;
-        }
-
-        let (last_move, move_data) = self.move_stack.pop().unwrap();
-        self.active_player = match self.active_player {
-            Player::Black => {
-                self.full_counter -= 1;
-                Player::White
-            }
-            Player::White => Player::Black,
-        };
-
-        let moved_piece = self
-            .find_piece_on_square(last_move.to)
-            .expect("cannot unmove from an empty square!");
-
-        let (player, opponent) = if self.active_player == Player::Black {
-            (&mut self.black, &mut self.white)
-        } else {
-            (&mut self.white, &mut self.black)
-        };
-
-        let old_king = player.king;
-
-        match moved_piece {
-            PieceType::Pawn(_) => {
-                //0: no promotion, 1: knight, 2: bishop, 3: rook, 4: queen
-                player.pawns &= !(1 << last_move.to);
-                player.pawns |= 1 << last_move.from;
-            }
-            PieceType::Rook(_) => {
-                player.rooks &= !(1 << last_move.to);
-                match last_move.promotion {
-                    Promotion::None => player.rooks |= 1 << last_move.from,
-                    Promotion::Rook => player.pawns |= 1 << last_move.from,
-                    x => {
-                        println!("{:?}", x);
-                        unreachable!()
-                    }
-                }
-            }
-            PieceType::Bishop(_) => {
-                player.bishops &= !(1 << last_move.to);
-                match last_move.promotion {
-                    Promotion::None => player.bishops |= 1 << last_move.from,
-                    Promotion::Bishop => player.pawns |= 1 << last_move.from,
-                    x => {
-                        println!("{:?}", x);
-                        unreachable!()
-                    }
-                }
-            }
-            PieceType::Knight(_) => {
-                player.knights &= !(1 << last_move.to);
-                match last_move.promotion {
-                    Promotion::None => player.knights |= 1 << last_move.from,
-                    Promotion::Knight => player.pawns |= 1 << last_move.from,
-                    x => {
-                        println!("{:?}", x);
-                        unreachable!()
-                    }
-                }
-            }
-            PieceType::Queen(_) => {
-                //0: no promotion, 1: knight, 2: bishop, 3: rook, 4: queen
-                player.queens &= !(1 << last_move.to);
-                match last_move.promotion {
-                    Promotion::None => player.queens |= 1 << last_move.from,
-                    Promotion::Queen => player.pawns |= 1 << last_move.from,
-                    x => {
-                        println!("{:?}", x);
-                        unreachable!()
-                    }
-                }
-            }
-            PieceType::King(active_player) => {
-                player.king &= !(1 << last_move.to);
-                player.king |= 1 << last_move.from;
-                if last_move.to as i16 - last_move.from as i16 == 2 {
-                    player.rooks &= !(1 << (last_move.to - 1));
-                    player.rooks |= 1 << ((last_move.to - last_move.to % 8) + 7);
-                } else if last_move.to as i16 - last_move.from as i16 == -2 {
-                    player.rooks &= !(1 << (last_move.to + 1));
-                    player.rooks |= 1 << (last_move.to - last_move.to % 8);
-                }
-
-                if player.king.count_ones() != 1 {
-                    eprintln!("active player: {:?}", active_player);
-                    eprintln!("actual active player: {:?}", self.active_player);
-                    eprintln!("kings: {}", player.king.count_ones());
-                    for i in 0..=7u8 {
-                        let row = (player.king >> (56 - (i * 8))) as u8;
-                        println!("{:08b}", row);
-                    }
-                    eprintln!();
-                    for i in 0..=7u8 {
-                        let row = (old_king >> (56 - (i * 8))) as u8;
-                        println!("{:08b}", row);
-                    }
-                    //println!("move string: {:?}", move_str);
-                    eprintln!("move struct: {:?}", last_move);
-                    eprintln!("{:?}", self.move_stack);
-                    panic!();
-                }
-            }
-        }
-
-        match move_data.capture {
-            CapturedPiece::None => (),
-            CapturedPiece::Pawn(square) => opponent.pawns |= 1 << square,
-            CapturedPiece::Knight(square) => opponent.knights |= 1 << square,
-            CapturedPiece::Bishop(square) => opponent.bishops |= 1 << square,
-            CapturedPiece::Rook(square) => opponent.rooks |= 1 << square,
-            CapturedPiece::Queen(square) => opponent.queens |= 1 << square,
-        }
-
-        self.en_passant_target = move_data.en_passant;
-        self.black.king_castle = move_data.castling_rights.black_kingside;
-        self.black.queen_castle = move_data.castling_rights.black_queenside;
-        self.white.king_castle = move_data.castling_rights.white_kingside;
-        self.white.queen_castle = move_data.castling_rights.white_queenside;
-        self.half_counter = move_data.halfmove_clock;
-    }
-    ///move_list is treated as a stack, and a slice of it containing the number of valid moves
-    /// is returned by this function. the rest of move_list should be assumed to be invalid.
-    fn generate_moves<'a>(&self, move_list: &'a mut [Move; 218]) -> &'a mut [Move] {
-        let mut move_index = 0usize;
-
-        let (player, opponent) = if self.active_player == Player::Black {
-            (&self.black, &self.white)
-        } else {
-            (&self.white, &self.black)
-        };
-
-        let all_player_pieces = player.all_pieces();
-        let all_opponent_pieces = opponent.all_pieces();
-        let all_pieces = self.all_pieces();
-        let king_square = player.king.ilog2() as usize;
-        let attacked_squares: u64 = find_opponent_attacked_squares(
-            all_pieces & !(player.king),
-            opponent,
-            &self.en_passant_target,
-            self.active_player,
-        );
-        let mut king_move = king_moves(king_square, all_player_pieces);
-        king_move &= !attacked_squares;
-        insert_moves(king_square as u8, king_move, move_list, &mut move_index);
-        let checked_by = pieces_checked_by(
-            all_pieces,
-            player,
-            opponent,
-            &self.en_passant_target,
-            self.active_player,
-        );
-        let mut capture_mask = 0xFFFFFFFFFFFFFFFFu64;
-        let mut push_mask = 0xFFFFFFFFFFFFFFFFu64;
-
-        match checked_by.count_ones() {
-            0 => {
-                //can only castle if the king is not in check.
-                let castles = king_castles(
-                    king_square,
-                    all_pieces,
-                    player.king_castle,
-                    player.queen_castle,
-                    attacked_squares,
-                );
-                insert_moves(king_square as u8, castles, move_list, &mut move_index);
-            }
-            1 => {
-                capture_mask = checked_by;
-                push_mask = 0;
-                if (opponent.bishops | opponent.rooks | opponent.queens) & checked_by != 0 {
-                    let square_checked_by = checked_by.ilog2();
-                    if bishop_moves(square_checked_by as usize, all_pieces, 0) & player.king != 0 {
-                        push_mask |= bishop_moves(king_square, all_pieces, all_pieces)
-                            & bishop_moves(checked_by.ilog2() as usize, all_pieces, all_pieces)
-                    }
-                    if rook_moves(square_checked_by as usize, all_pieces, 0) & player.king != 0 {
-                        push_mask |= rook_moves(king_square, all_pieces, all_pieces)
-                            & rook_moves(checked_by.ilog2() as usize, all_pieces, all_pieces)
-                    }
-                }
-            }
-            _ => {
-                //after 50 turns without a capture or pawn move, *and* there is at least one legal move,
-                //the game is over by the fifty-move rule.
-                if self.half_counter >= 100 && move_index > 0 {
-                    return move_list.as_mut_slice().split_at_mut(0).0;
-                }
-
-                //check self.move_stack. if there are more than 6 entries, and the last 6 are the same 2 moves repeated,
-                //the game is over by threefold repetition.
-                let mut x = self.move_stack.iter().rev().take(6);
-                if x.len() == 6 {
-                    let (move1, _) = x.next().unwrap();
-                    let (move2, _) = x.next().unwrap();
-                    let mut is_draw = true;
-                    for (move_, data) in x {
-                        if data.capture != CapturedPiece::None || (move_ != move1 && move_ != move2)
-                        {
-                            is_draw = false;
-                        }
-                    }
-                    if is_draw {
-                        return move_list.as_mut_slice().split_at_mut(0).0;
-                    }
-                }
-                return move_list.as_mut_slice().split_at_mut(move_index).0;
-            }
-        }
-        let pinned_pieces = king_pins_bishop(
-            king_square,
-            all_player_pieces,
-            all_pieces,
-            opponent.bishops | opponent.queens,
-        ) | king_pins_rook(
-            king_square,
-            all_player_pieces,
-            all_pieces,
-            opponent.rooks | opponent.queens,
-        );
-
-        generate_sliding_moves(player, all_pieces, all_player_pieces, capture_mask, push_mask, pinned_pieces, king_square, move_list, &mut move_index);
-        generate_knight_moves(player, all_player_pieces, capture_mask, push_mask, pinned_pieces, move_list, &mut move_index);
-        generate_pawn_moves(player, opponent, king_square, all_pieces, all_opponent_pieces, &self.en_passant_target, self.active_player, capture_mask, push_mask, pinned_pieces, move_list, &mut move_index);
-        //after 50 turns without a capture or pawn move, *and* there is at least one legal move,
-        //the game is over by the fifty-move rule.
-        if self.half_counter >= 100 && move_index > 0 {
-            return move_list.as_mut_slice().split_at_mut(0).0;
-        }
-
-        //check self.move_stack. if there are more than 6 entries, and the last 6 are the same 2 moves repeated,
-        //the game is over by threefold repetition.
-        let mut x = self.move_stack.iter().rev().take(6);
-        if x.len() == 6 {
-            let (move1, _) = x.next().unwrap();
-            let (move2, _) = x.next().unwrap();
-            let mut is_draw = true;
-            for (move_, data) in x {
-                if data.capture != CapturedPiece::None || (move_ != move1 && move_ != move2) {
-                    is_draw = false;
-                }
-            }
-            if is_draw {
-                return move_list.as_mut_slice().split_at_mut(0).0;
-            }
-        }
-        move_list.as_mut_slice().split_at_mut(move_index).0
-    }
+    println!()
 }
 
 struct BitboardIterator(u64);
@@ -713,54 +59,54 @@ fn find_opponent_attacked_squares(
     );
     let mut attacked_squares = 0;
     attacked_squares |= BitboardIterator::new(opponent.rooks)
-        .fold(0, |x, y| x | rook_moves(y as usize, all_pieces, 0));
+        .fold(0, |x, y| x | rook_moves(y , all_pieces, 0));
     attacked_squares |= BitboardIterator::new(opponent.bishops)
-        .fold(0, |x, y| x | bishop_moves(y as usize, all_pieces, 0));
+        .fold(0, |x, y| x | bishop_moves(y , all_pieces, 0));
     attacked_squares |= BitboardIterator::new(opponent.queens)
-        .fold(0, |x, y| x | queen_moves(y as usize, all_pieces, 0));
+        .fold(0, |x, y| x | queen_moves(y , all_pieces, 0));
     attacked_squares |=
-        BitboardIterator::new(opponent.knights).fold(0, |x, y| x | knight_moves(y as usize, 0));
-    attacked_squares |= king_moves(opponent.king.ilog2() as usize, 0);
+        BitboardIterator::new(opponent.knights).fold(0, |x, y| x | knight_moves(y , 0));
+    attacked_squares |= king_moves(opponent.king.ilog2() as u8, 0);
     attacked_squares |= pawn_attacked_squares[0] | pawn_attacked_squares[1];
     attacked_squares
 }
 
-fn generate_sliding_moves(player: &PlayerState, all_pieces: u64, all_player_pieces: u64, capture_mask: u64, push_mask: u64, pinned_pieces: u64, king_square: usize, move_list: &mut [Move;218], move_index: &mut usize) {
+fn generate_sliding_moves(player: &PlayerState, all_pieces: u64, all_player_pieces: u64, capture_mask: u64, push_mask: u64, pinned_pieces: u64, king_square: u8, move_list: &mut [Move;218], move_index: &mut usize) {
     for rook in BitboardIterator::new(player.rooks) {
-        let mut moves = rook_moves(rook as usize, all_pieces, all_player_pieces)
+        let mut moves = rook_moves(rook , all_pieces, all_player_pieces)
             & (capture_mask | push_mask);
         if 1 << rook & pinned_pieces != 0 {
-            if bishop_moves(rook as usize, 0, 0) & player.king != 0 {
-                moves &= bishop_moves(king_square, 0, 0) & bishop_moves(rook as usize, 0, 0)
+            if bishop_moves(rook , 0, 0) & player.king != 0 {
+                moves &= bishop_moves(king_square, 0, 0) & bishop_moves(rook , 0, 0)
             }
-            if rook_moves(rook as usize, 0, 0) & player.king != 0 {
-                moves &= rook_moves(king_square, 0, 0) & rook_moves(rook as usize, 0, 0)
+            if rook_moves(rook , 0, 0) & player.king != 0 {
+                moves &= rook_moves(king_square, 0, 0) & rook_moves(rook , 0, 0)
             }
         }
         insert_moves(rook, moves, move_list, move_index);
     }
     for bishop in BitboardIterator::new(player.bishops) {
-        let mut moves = bishop_moves(bishop as usize, all_pieces, all_player_pieces)
+        let mut moves = bishop_moves(bishop , all_pieces, all_player_pieces)
             & (capture_mask | push_mask);
         if 1 << bishop & pinned_pieces != 0 {
-            if bishop_moves(bishop as usize, 0, 0) & player.king != 0 {
-                moves &= bishop_moves(king_square, 0, 0) & bishop_moves(bishop as usize, 0, 0)
+            if bishop_moves(bishop , 0, 0) & player.king != 0 {
+                moves &= bishop_moves(king_square, 0, 0) & bishop_moves(bishop , 0, 0)
             }
-            if rook_moves(bishop as usize, 0, 0) & player.king != 0 {
-                moves &= rook_moves(king_square, 0, 0) & rook_moves(bishop as usize, 0, 0)
+            if rook_moves(bishop , 0, 0) & player.king != 0 {
+                moves &= rook_moves(king_square, 0, 0) & rook_moves(bishop , 0, 0)
             }
         }
         insert_moves(bishop, moves, move_list, move_index);
     }
     for queen in BitboardIterator::new(player.queens) {
-        let mut moves = queen_moves(queen as usize, all_pieces, all_player_pieces)
+        let mut moves = queen_moves(queen , all_pieces, all_player_pieces)
             & (capture_mask | push_mask);
         if 1 << queen & pinned_pieces != 0 {
-            if bishop_moves(queen as usize, 0, 0) & player.king != 0 {
-                moves &= bishop_moves(king_square, 0, 0) & bishop_moves(queen as usize, 0, 0)
+            if bishop_moves(queen , 0, 0) & player.king != 0 {
+                moves &= bishop_moves(king_square, 0, 0) & bishop_moves(queen , 0, 0)
             }
-            if rook_moves(queen as usize, 0, 0) & player.king != 0 {
-                moves &= rook_moves(king_square, 0, 0) & rook_moves(queen as usize, 0, 0)
+            if rook_moves(queen , 0, 0) & player.king != 0 {
+                moves &= rook_moves(king_square, 0, 0) & rook_moves(queen , 0, 0)
             }
         }
         insert_moves(queen, moves, move_list, move_index);
@@ -770,7 +116,7 @@ fn generate_sliding_moves(player: &PlayerState, all_pieces: u64, all_player_piec
 fn generate_knight_moves(player: &PlayerState, all_player_pieces: u64, capture_mask: u64, push_mask: u64, pinned_pieces: u64, move_list: &mut [Move; 218], move_index:&mut usize) {
     for knight in BitboardIterator::new(player.knights) {
         let moves =
-            knight_moves(knight as usize, all_player_pieces) & (capture_mask | push_mask);
+            knight_moves(knight , all_player_pieces) & (capture_mask | push_mask);
         if 1 << knight & pinned_pieces == 0 {
             insert_moves(knight, moves, move_list, move_index);
         }
@@ -800,7 +146,7 @@ fn pawn_promotion_moves(pawn: u8, move_: u8, move_list: &mut [Move; 218], move_i
         }
 }
 //todo!: ensure that all moves that could go to edge of board generate proper promotions!
-fn generate_pawn_moves(player: &PlayerState, opponent: &PlayerState, king_square: usize, all_pieces: u64, all_opponent_pieces: u64, en_passant_target: &EnPassantTarget, active_player: Player,capture_mask: u64, push_mask: u64, pinned_pieces: u64, move_list: &mut [Move; 218], move_index: &mut usize) {
+fn generate_pawn_moves(player: &PlayerState, opponent: &PlayerState, king_square: u8, all_pieces: u64, all_opponent_pieces: u64, en_passant_target: &EnPassantTarget, active_player: Player,capture_mask: u64, push_mask: u64, pinned_pieces: u64, move_list: &mut [Move; 218], move_index: &mut usize) {
     let mut pawns = player.pawns;
     let pinned_pawns = pawns & pinned_pieces;
     let offset: i8 = match active_player {
@@ -910,14 +256,14 @@ fn pieces_checked_by(
             | (pawn_attacked_squares[1] & player.king) << 9
     };
     king_attacked_rooks(
-        player.king.ilog2() as usize,
+        player.king.ilog2() as u8,
         all_pieces,
         opponent.rooks | opponent.queens,
     ) | king_attacked_bishops(
-        player.king.ilog2() as usize,
+        player.king.ilog2() as u8,
         all_pieces,
         opponent.bishops | opponent.queens,
-    ) | king_attacked_knights(player.king.ilog2() as usize, opponent.knights)
+    ) | king_attacked_knights(player.king.ilog2() as u8, opponent.knights)
         | pawns_attacking_king
 }
 
@@ -986,12 +332,12 @@ fn pawn_attacks(
     }
 }
 
-fn king_moves(square: usize, friendly_pieces: u64) -> u64 {
-    crate::precomputed::moves::KING_MOVES[square] & !friendly_pieces
+fn king_moves(square: u8, friendly_pieces: u64) -> u64 {
+    crate::precomputed::moves::KING_MOVES[square as usize] & !friendly_pieces
 }
 
 fn king_castles(
-    square: usize,
+    square: u8,
     all_pieces: u64,
     king_castle: bool,
     queen_castle: bool,
@@ -1005,7 +351,7 @@ fn king_castles(
         .count_ones()
             == 2
     {
-        result |= 1 << ((square - square % 8) + 1);
+        result |= 1 << ((square - File::from_square(square).to_u8()) + 1);
     };
     if queen_castle
         && (1u64 << square | 1u64 << (square + 1) | 1u64 << (square + 2)) & attacked_squares == 0
@@ -1014,19 +360,16 @@ fn king_castles(
         .count_ones()
             == 3
     {
-        result |= 1 << ((square - square % 8) + 5);
+        result |= 1 << ((square - File::from_square(square).to_u8()) + 5);
     };
     result
 }
 
-fn king_attacked_rooks(king: usize, all_pieces: u64, rooks_and_queens: u64) -> u64 {
-    let mut new_rooks_and_queens = rooks_and_queens;
-    let mut index = rooks_and_queens.trailing_zeros();
+fn king_attacked_rooks(king: u8, all_pieces: u64, rooks_and_queens: u64) -> u64 {
     let king_moves = rook_moves(king, rooks_and_queens, 0);
     let mut pinned_pieces = 0;
-    while index <= 63 && new_rooks_and_queens != 0 {
-        new_rooks_and_queens = (rooks_and_queens >> index) & !1;
-        let moves = rook_moves(index as usize, 1 << king, 0);
+    for index in BitboardIterator::new(rooks_and_queens) {
+        let moves = rook_moves(index, 1 << king, 0);
         if (moves & (king_moves | 1 << king)).count_ones() > 0 && (moves) & (1 << king) != 0 {
             let mask = moves & (king_moves | 1 << king);
             let masked_pieces = (all_pieces & !(1u64 << king)) & mask;
@@ -1034,19 +377,15 @@ fn king_attacked_rooks(king: usize, all_pieces: u64, rooks_and_queens: u64) -> u
                 pinned_pieces |= 1 << index;
             }
         }
-        index += new_rooks_and_queens.trailing_zeros();
     }
     pinned_pieces
 }
 
-fn king_attacked_bishops(king: usize, all_pieces: u64, bishops_and_queens: u64) -> u64 {
-    let mut new_bishops_and_queens = bishops_and_queens;
-    let mut index = bishops_and_queens.trailing_zeros();
+fn king_attacked_bishops(king: u8, all_pieces: u64, bishops_and_queens: u64) -> u64 {
     let king_moves = bishop_moves(king, bishops_and_queens, 0);
     let mut pinned_pieces = 0;
-    while index <= 63 && new_bishops_and_queens != 0 {
-        new_bishops_and_queens = (bishops_and_queens >> index) & !1;
-        let moves = bishop_moves(index as usize, 1 << king, 0);
+    for index in BitboardIterator::new(bishops_and_queens) {
+        let moves = bishop_moves(index, 1 << king, 0);
         if (moves & (king_moves | 1 << king)).count_ones() > 0 && (moves) & (1 << king) != 0 {
             let mask = moves & (king_moves | 1 << king);
             let masked_pieces = (all_pieces & !(1u64 << king)) & mask;
@@ -1054,29 +393,25 @@ fn king_attacked_bishops(king: usize, all_pieces: u64, bishops_and_queens: u64) 
                 pinned_pieces |= 1 << index;
             }
         }
-        index += new_bishops_and_queens.trailing_zeros();
     }
     pinned_pieces
 }
 
-fn king_attacked_knights(king: usize, enemy_knights: u64) -> u64 {
+fn king_attacked_knights(king: u8, enemy_knights: u64) -> u64 {
     knight_moves(king, 0) & enemy_knights
 }
 
 ///returns a bitboard of all friendly pieces that are pinned to the king.
 fn king_pins_rook(
-    king: usize,
+    king: u8,
     friendly_pieces: u64,
     all_pieces: u64,
     rooks_and_queens: u64,
 ) -> u64 {
-    let mut new_rooks_and_queens = rooks_and_queens;
-    let mut index = rooks_and_queens.trailing_zeros();
     let king_moves = rook_moves(king, rooks_and_queens, 0);
     let mut pinned_pieces = 0;
-    while index <= 63 && new_rooks_and_queens != 0 {
-        new_rooks_and_queens = (rooks_and_queens >> index) & !1;
-        let moves = rook_moves(index as usize, 1 << king, 0);
+    for index in BitboardIterator::new(rooks_and_queens) {
+        let moves = rook_moves(index, 1 << king, 0);
         if (moves & (king_moves | 1 << king)).count_ones() > 0 && (moves) & (1 << king) != 0 {
             let mask = moves & (king_moves | 1 << king);
             let masked_pieces = (all_pieces & !(1u64 << king)) & mask;
@@ -1086,25 +421,24 @@ fn king_pins_rook(
                 pinned_pieces |= masked_pieces;
             }
         }
-        index += new_rooks_and_queens.trailing_zeros();
     }
     pinned_pieces
 }
 
 ///returns a bitboard of all friendly pieces that are pinned to the king.
 fn king_pins_bishop(
-    king: usize,
+    king: u8,
     friendly_pieces: u64,
     all_pieces: u64,
     bishops_and_queens: u64,
 ) -> u64 {
     let mut new_bishops_and_queens = bishops_and_queens;
-    let mut index = bishops_and_queens.trailing_zeros();
+    let mut index = bishops_and_queens.trailing_zeros() as u8;
     let king_moves = bishop_moves(king, bishops_and_queens, 0);
     let mut pinned_pieces = 0;
     while index <= 63 && new_bishops_and_queens != 0 {
         new_bishops_and_queens = (bishops_and_queens >> index) & !1;
-        let moves = bishop_moves(index as usize, 1 << king, 0);
+        let moves = bishop_moves(index, 1 << king, 0);
         if (moves & (king_moves | 1 << king)).count_ones() > 0 && (moves) & (1 << king) != 0 {
             let mask = moves & (king_moves | 1 << king);
             let masked_pieces = (all_pieces & !(1u64 << king)) & mask;
@@ -1114,30 +448,30 @@ fn king_pins_bishop(
                 pinned_pieces |= masked_pieces;
             }
         }
-        index += new_bishops_and_queens.trailing_zeros();
+        index += new_bishops_and_queens.trailing_zeros() as u8;
     }
     pinned_pieces
 }
 
-fn knight_moves(square: usize, friendly_pieces: u64) -> u64 {
-    crate::precomputed::moves::KNIGHT_MOVES[square] & !friendly_pieces
+fn knight_moves(square: u8, friendly_pieces: u64) -> u64 {
+    crate::precomputed::moves::KNIGHT_MOVES[square as usize] & !friendly_pieces
 }
 
-fn bishop_moves(square: usize, all_pieces: u64, friendly_pieces: u64) -> u64 {
-    let magic = crate::precomputed::bishop_magic::BISHOP_MAGICS[square];
-    let blockers = all_pieces & crate::precomputed::moves::BISHOP_MASK[square];
+fn bishop_moves(square: u8, all_pieces: u64, friendly_pieces: u64) -> u64 {
+    let magic = crate::precomputed::bishop_magic::BISHOP_MAGICS[square as usize];
+    let blockers = all_pieces & crate::precomputed::moves::BISHOP_MASK[square as usize];
     let magic_index = crate::precomputed::magic_to_index::<9>(magic, blockers);
-    crate::precomputed::bishop_magic::BISHOP_ATTACKS[square][magic_index] & !friendly_pieces
+    crate::precomputed::bishop_magic::BISHOP_ATTACKS[square as usize][magic_index] & !friendly_pieces
 }
 
-fn rook_moves(square: usize, all_pieces: u64, friendly_pieces: u64) -> u64 {
-    let magic = crate::precomputed::rook_magic::ROOK_MAGICS[square];
-    let blockers = all_pieces & crate::precomputed::moves::ROOK_MASK[square];
+fn rook_moves(square: u8, all_pieces: u64, friendly_pieces: u64) -> u64 {
+    let magic = crate::precomputed::rook_magic::ROOK_MAGICS[square as usize];
+    let blockers = all_pieces & crate::precomputed::moves::ROOK_MASK[square as usize];
     let magic_index = crate::precomputed::magic_to_index::<12>(magic, blockers);
-    crate::precomputed::rook_magic::ROOK_ATTACKS[square][magic_index] & !friendly_pieces
+    crate::precomputed::rook_magic::ROOK_ATTACKS[square as usize][magic_index] & !friendly_pieces
 }
 
-fn queen_moves(square: usize, all_pieces: u64, friendly_pieces: u64) -> u64 {
+fn queen_moves(square: u8, all_pieces: u64, friendly_pieces: u64) -> u64 {
     bishop_moves(square, all_pieces, friendly_pieces)
         | rook_moves(square, all_pieces, friendly_pieces)
 }
@@ -1152,8 +486,10 @@ fn move_to_algebraic(move_: &Move, board: &BoardState) -> String {
     ];
     static FILES: [&str; 8] = ["h", "g", "f", "e", "d", "c", "b", "a"];
     static RANKS: [&str; 8] = ["1", "2", "3", "4", "5", "6", "7", "8"];
-    let file_mask = FILE_H << (move_.from % 8);
+    let file_mask = FILE_H << (File::from_square(move_.from).to_u8());
+    let from_file = (File::from_square(move_.from).to_u8()) as usize;
     let rank_mask = RANK_1 << (move_.from / 8);
+    let from_rank = (Rank::from_square(move_.from).to_u8()) as usize;
     let mut rank = "";
     let mut file = "";
     let mut promotion = "";
@@ -1161,103 +497,103 @@ fn move_to_algebraic(move_: &Move, board: &BoardState) -> String {
     let piece_square = 1u64 << move_.from;
     let piece = if piece_square & board.black.rooks != 0 {
         if (board.black.bishops
-            & bishop_moves(move_.to as usize, board.all_pieces(), 0)
+            & bishop_moves(move_.to, board.all_pieces(), 0)
             & rank_mask)
             .count_ones()
             > 1
             && (board.black.queens
-                & queen_moves(move_.to as usize, board.all_pieces(), 0)
+                & queen_moves(move_.to, board.all_pieces(), 0)
                 & file_mask)
                 .count_ones()
                 > 1
         {
-            file = FILES[move_.from as usize % 8];
-            rank = RANKS[move_.from as usize / 8];
+            file = FILES[from_file];
+            rank = RANKS[from_rank];
         } else if (board.black.bishops
-            & bishop_moves(move_.to as usize, board.all_pieces(), 0)
+            & bishop_moves(move_.to, board.all_pieces(), 0)
             & file_mask)
             .count_ones()
             > 1
         {
-            rank = RANKS[move_.from as usize / 8];
-        } else if (board.black.bishops & bishop_moves(move_.to as usize, board.all_pieces(), 0))
+            rank = RANKS[from_rank];
+        } else if (board.black.bishops & bishop_moves(move_.to, board.all_pieces(), 0))
             .count_ones()
             > 1
         {
-            file = FILES[move_.from as usize % 8];
+            file = FILES[from_file];
         }
         "r"
     } else if piece_square & board.black.bishops != 0 {
         if (board.black.bishops
-            & bishop_moves(move_.to as usize, board.all_pieces(), 0)
+            & bishop_moves(move_.to, board.all_pieces(), 0)
             & rank_mask)
             .count_ones()
             > 1
             && (board.black.queens
-                & queen_moves(move_.to as usize, board.all_pieces(), 0)
+                & queen_moves(move_.to, board.all_pieces(), 0)
                 & file_mask)
                 .count_ones()
                 > 1
         {
-            file = FILES[move_.from as usize % 8];
-            rank = RANKS[move_.from as usize / 8];
+            file = FILES[from_file];
+            rank = RANKS[from_rank];
         } else if (board.black.bishops
-            & bishop_moves(move_.to as usize, board.all_pieces(), 0)
+            & bishop_moves(move_.to, board.all_pieces(), 0)
             & file_mask)
             .count_ones()
             > 1
         {
-            rank = RANKS[move_.from as usize / 8];
-        } else if (board.black.bishops & bishop_moves(move_.to as usize, board.all_pieces(), 0))
+            rank = RANKS[from_rank];
+        } else if (board.black.bishops & bishop_moves(move_.to, board.all_pieces(), 0))
             .count_ones()
             > 1
         {
-            file = FILES[move_.from as usize % 8];
+            file = FILES[from_file];
         }
         "b"
     } else if piece_square & board.black.knights != 0 {
-        if (board.black.knights & knight_moves(move_.to as usize, 0) & rank_mask).count_ones() > 1
+        if (board.black.knights & knight_moves(move_.to, 0) & rank_mask).count_ones() > 1
             && (board.black.queens
-                & queen_moves(move_.to as usize, board.all_pieces(), 0)
+                & queen_moves(move_.to, board.all_pieces(), 0)
                 & file_mask)
                 .count_ones()
                 > 1
         {
-            file = FILES[move_.from as usize % 8];
-            rank = RANKS[move_.from as usize / 8];
-        } else if (board.black.knights & knight_moves(move_.to as usize, 0) & file_mask)
+            file = FILES[from_file];
+            rank = RANKS[from_rank];
+        } else if (board.black.knights & knight_moves(move_.to, 0) & file_mask)
             .count_ones()
             > 1
         {
-            rank = RANKS[move_.from as usize / 8];
-        } else if (board.black.knights & knight_moves(move_.to as usize, 0)).count_ones() > 1 {
-            file = FILES[move_.from as usize % 8];
+            rank = RANKS[from_rank];
+        } else if (board.black.knights & knight_moves(move_.to, 0)).count_ones() > 1 {
+            file = FILES[from_file];
         }
         "n"
     } else if piece_square & board.black.queens != 0 {
-        if (board.black.queens & queen_moves(move_.to as usize, board.all_pieces(), 0) & rank_mask)
+        if (board.black.queens & queen_moves(move_.to, board.all_pieces(), 0) & rank_mask)
             .count_ones()
             > 1
             && (board.black.queens
-                & queen_moves(move_.to as usize, board.all_pieces(), 0)
+                & queen_moves(move_.to, board.all_pieces(), 0)
                 & file_mask)
                 .count_ones()
                 > 1
         {
-            file = FILES[move_.from as usize % 8];
-            rank = RANKS[move_.from as usize / 8];
+            file = FILES[from_file];
+            rank = RANKS[from_rank];
         } else if (board.black.queens
-            & queen_moves(move_.to as usize, board.all_pieces(), 0)
+            & queen_moves(move_.to, board.all_pieces(), 0)
             & file_mask)
             .count_ones()
             > 1
         {
-            rank = RANKS[move_.from as usize / 8];
-        } else if (board.black.queens & queen_moves(move_.to as usize, board.all_pieces(), 0))
+            rank = RANKS[from_rank];
+        } else if (board.black.queens & queen_moves(move_.to, board.all_pieces(), 0))
             .count_ones()
             > 1
         {
-            file = FILES[move_.from as usize % 8];
+            file = FILES[from_file];
         }
         "q"
     } else if piece_square & board.black.king != 0 {
@@ -1272,7 +608,7 @@ fn move_to_algebraic(move_: &Move, board: &BoardState) -> String {
         if (1u64 << move_.from & (attacks[0] | attacks[1])) != 0
             && (board.black.pawns & (attacks[0] | attacks[1])) != 0
         {
-            file = FILES[move_.from as usize % 8];
+            file = FILES[from_file];
         }
         promotion = match move_.promotion {
             Promotion::Knight => "=n",
@@ -1283,102 +619,102 @@ fn move_to_algebraic(move_: &Move, board: &BoardState) -> String {
         };
         ""
     } else if piece_square & board.white.rooks != 0 {
-        if (board.white.rooks & rook_moves(move_.to as usize, board.all_pieces(), 0) & rank_mask)
+        if (board.white.rooks & rook_moves(move_.to, board.all_pieces(), 0) & rank_mask)
             .count_ones()
             > 1
             && (board.black.queens
-                & queen_moves(move_.to as usize, board.all_pieces(), 0)
+                & queen_moves(move_.to, board.all_pieces(), 0)
                 & file_mask)
                 .count_ones()
                 > 1
         {
-            file = FILES[move_.from as usize % 8];
-            rank = RANKS[move_.from as usize / 8];
+            file = FILES[from_file];
+            rank = RANKS[from_rank];
         } else if (board.white.rooks
-            & rook_moves(move_.to as usize, board.all_pieces(), 0)
+            & rook_moves(move_.to, board.all_pieces(), 0)
             & file_mask)
             .count_ones()
             > 1
         {
-            rank = RANKS[move_.from as usize / 8];
-        } else if (board.white.rooks & rook_moves(move_.to as usize, board.all_pieces(), 0))
+            rank = RANKS[from_rank];
+        } else if (board.white.rooks & rook_moves(move_.to, board.all_pieces(), 0))
             .count_ones()
             > 1
         {
-            file = FILES[move_.from as usize % 8];
+            file = FILES[from_file];
         }
         "R"
     } else if piece_square & board.white.bishops != 0 {
         if (board.white.bishops
-            & bishop_moves(move_.to as usize, board.all_pieces(), 0)
+            & bishop_moves(move_.to, board.all_pieces(), 0)
             & rank_mask)
             .count_ones()
             > 1
             && (board.black.queens
-                & queen_moves(move_.to as usize, board.all_pieces(), 0)
+                & queen_moves(move_.to, board.all_pieces(), 0)
                 & file_mask)
                 .count_ones()
                 > 1
         {
-            file = FILES[move_.from as usize % 8];
-            rank = RANKS[move_.from as usize / 8];
+            file = FILES[from_file];
+            rank = RANKS[from_rank];
         } else if (board.white.bishops
-            & bishop_moves(move_.to as usize, board.all_pieces(), 0)
+            & bishop_moves(move_.to, board.all_pieces(), 0)
             & file_mask)
             .count_ones()
             > 1
         {
-            rank = RANKS[move_.from as usize / 8];
-        } else if (board.white.bishops & bishop_moves(move_.to as usize, board.all_pieces(), 0))
+            rank = RANKS[from_rank];
+        } else if (board.white.bishops & bishop_moves(move_.to, board.all_pieces(), 0))
             .count_ones()
             > 1
         {
-            file = FILES[move_.from as usize % 8];
+            file = FILES[from_file];
         }
         "B"
     } else if piece_square & board.white.knights != 0 {
-        if (board.white.knights & knight_moves(move_.to as usize, 0) & rank_mask).count_ones() > 1
+        if (board.white.knights & knight_moves(move_.to, 0) & rank_mask).count_ones() > 1
             && (board.black.queens
-                & queen_moves(move_.to as usize, board.all_pieces(), 0)
+                & queen_moves(move_.to, board.all_pieces(), 0)
                 & file_mask)
                 .count_ones()
                 > 1
         {
-            file = FILES[move_.from as usize % 8];
-            rank = RANKS[move_.from as usize / 8];
-        } else if (board.white.knights & knight_moves(move_.to as usize, 0) & file_mask)
+            file = FILES[from_file];
+            rank = RANKS[from_rank];
+        } else if (board.white.knights & knight_moves(move_.to, 0) & file_mask)
             .count_ones()
             > 1
         {
-            rank = RANKS[move_.from as usize / 8];
-        } else if (board.white.knights & knight_moves(move_.to as usize, 0)).count_ones() > 1 {
-            file = FILES[move_.from as usize % 8];
+            rank = RANKS[from_rank];
+        } else if (board.white.knights & knight_moves(move_.to, 0)).count_ones() > 1 {
+            file = FILES[from_file];
         }
         "N"
     } else if piece_square & board.white.queens != 0 {
-        if (board.white.queens & queen_moves(move_.to as usize, board.all_pieces(), 0) & rank_mask)
+        if (board.white.queens & queen_moves(move_.to, board.all_pieces(), 0) & rank_mask)
             .count_ones()
             > 1
             && (board.black.queens
-                & queen_moves(move_.to as usize, board.all_pieces(), 0)
+                & queen_moves(move_.to, board.all_pieces(), 0)
                 & file_mask)
                 .count_ones()
                 > 1
         {
-            file = FILES[move_.from as usize % 8];
-            rank = RANKS[move_.from as usize / 8];
+            file = FILES[from_file];
+            rank = RANKS[from_rank];
         } else if (board.white.queens
-            & queen_moves(move_.to as usize, board.all_pieces(), 0)
+            & queen_moves(move_.to, board.all_pieces(), 0)
             & file_mask)
             .count_ones()
             > 1
         {
-            rank = RANKS[move_.from as usize / 8];
-        } else if (board.white.queens & queen_moves(move_.to as usize, board.all_pieces(), 0))
+            rank = RANKS[from_rank];
+        } else if (board.white.queens & queen_moves(move_.to, board.all_pieces(), 0))
             .count_ones()
             > 1
         {
-            file = FILES[move_.from as usize % 8];
+            file = FILES[from_file];
         }
         "Q"
     } else if piece_square & board.white.king != 0 {
@@ -1393,7 +729,7 @@ fn move_to_algebraic(move_: &Move, board: &BoardState) -> String {
         if (1u64 << move_.from & (attacks[0] | attacks[1])) != 0
             && (board.white.pawns & (attacks[0] | attacks[1])) != 0
         {
-            file = FILES[move_.from as usize % 8];
+            file = FILES[from_file];
         }
         promotion = match move_.promotion {
             Promotion::Knight => "=N",

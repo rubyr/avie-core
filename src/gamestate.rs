@@ -34,6 +34,17 @@ pub enum File {
     H = 7,
 }
 
+impl File {
+    pub fn from_square(square: u8) -> File{
+        debug_assert_eq!(square & 0b11000000, 0);
+        unsafe {std::mem::transmute(square % 8)}
+    }
+
+    pub fn to_u8(&self) -> u8 {
+        unsafe {std::mem::transmute(*self)}
+    }
+}
+
 impl TryFrom<char> for File {
     type Error = char;
     fn try_from(file: char) -> Result<File, Self::Error> {
@@ -55,6 +66,17 @@ pub enum Rank {
     Six = 5,
     Seven = 6,
     Eight = 7,
+}
+
+impl Rank{
+    pub fn from_square(square: u8) -> Rank{
+        debug_assert_eq!(square & 0b11000000, 0);
+        unsafe {std::mem::transmute(square / 8)}
+    }
+
+    pub fn to_u8(&self) -> u8 {
+        unsafe {std::mem::transmute(*self)}
+    }
 }
 
 impl TryFrom<char> for Rank {
