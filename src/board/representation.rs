@@ -36,7 +36,7 @@ impl PlayerState {
 ///  0bX0000000: active flag. if 1, there was no en passant on the previous turn, and all other bits are ignored.
 ///  0b0X000000: player flag. 0 for white, 1 for black.
 ///  0b00XXXXXX: square of valid en passant target. bitboard is obtained by shifting 1u64 by this value.
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Copy)]
 pub struct EnPassantTarget(pub u8);
 pub static EN_PASSANT_NO_SQUARE: u8 = 0b10000000;
 pub static EN_PASSANT_SQUARE_MASK: u8 = 0b00111111;
@@ -143,6 +143,12 @@ impl Move {
     }
 }
 
+impl Default for Move {
+    fn default() -> Move {
+        Move::new(0, 0, Promotion::None)
+    }
+}
+
 pub fn en_passant_target(target: &Option<(File, Rank)>) -> EnPassantTarget {
     match target {
         None => EnPassantTarget(EN_PASSANT_NO_SQUARE),
@@ -213,6 +219,24 @@ impl BoardState {
 
     pub fn all_pieces(&self) -> u64 {
         self.black.all_pieces() | self.white.all_pieces()
+    }
+
+    pub fn is_in_check(&self) -> bool {
+        todo!()
+    }
+
+    pub fn player(&self) -> &PlayerState {
+        match self.active_player {
+            Player::Black => &self.black,
+            Player::White => &self.white
+        }
+    }
+
+    pub fn opponent(&self) -> &PlayerState {
+        match self.active_player {
+            Player::Black => &self.white,
+            Player::White => &self.black
+        }
     }
 
     pub fn find_piece_on_square(&self, square: u8) -> Option<PieceType> {

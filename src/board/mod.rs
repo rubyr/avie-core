@@ -2,6 +2,8 @@ use crate::gamestate::{File, Player, Rank};
 mod tests;
 mod representation;
 
+pub use crate::board::representation::*;
+
 use crate::board::representation::*;
 static FILE_A: u64 = 0x8080808080808080u64;
 static NOT_FILE_A: u64 = !FILE_A;
@@ -302,7 +304,7 @@ fn pawn_double_pushes(pawns: u64, all_pieces: u64, player: Player) -> u64 {
     }
 }
 ///attacks are stored in an array [west_attacks, east_attacks] from white's perspective
-fn pawn_attacks(
+pub fn pawn_attacks(
     pawns: u64,
     enemy_pieces: u64,
     en_passant_target: EnPassantTarget,
