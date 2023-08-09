@@ -465,7 +465,7 @@ impl BoardState {
         let moved_piece = self
             .find_piece_on_square(last_move.to);
         if moved_piece.is_none() {
-            println!("{:?}", self.move_stack);
+            println!("move: {:?}, board: {:?}", last_move, self);
         }
         let moved_piece = moved_piece.expect("cannot unmove from an empty square!");
 
