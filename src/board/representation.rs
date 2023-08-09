@@ -463,8 +463,11 @@ impl BoardState {
         };
 
         let moved_piece = self
-            .find_piece_on_square(last_move.to)
-            .expect("cannot unmove from an empty square!");
+            .find_piece_on_square(last_move.to);
+        if moved_piece.is_none() {
+            println!("{:?}", self.move_stack);
+        }
+        let moved_piece = moved_piece.expect("cannot unmove from an empty square!");
 
         let (player, opponent) = if self.active_player == Player::Black {
             (&mut self.black, &mut self.white)
