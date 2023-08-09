@@ -131,6 +131,7 @@ fn alpha_beta_search(
 }
 
 pub fn choose_best_move(board: &mut BoardState, moves: &mut [Move], should_stop: &AtomicBool) -> (Move, i64) {
+    let start_time = std::time::Instant::now();
     if moves.is_empty() {
         if board.is_in_check() {
             return (Move::default(), WORST_SCORE);
@@ -142,6 +143,9 @@ pub fn choose_best_move(board: &mut BoardState, moves: &mut [Move], should_stop:
     let mut scores = vec![WORST_SCORE; moves.len()];
     let mut depth = 1;
     'search: while !should_stop.load(Ordering::Relaxed) {
+        println!("info depth {}", depth);
+        let since_start = std::time::Instant::now() - start_time;
+        println!("info time {}", since_start.as_millis());
         for i in 0..moves.len() {
             if should_stop.load(Ordering::Relaxed) {
                 break 'search;
