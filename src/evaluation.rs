@@ -141,16 +141,16 @@ pub fn choose_best_move(board: &mut BoardState, moves: &mut [Move], should_stop:
     sort_moves(board, moves);
     let mut scores = vec![WORST_SCORE; moves.len()];
     let mut depth = 1;
-    while !should_stop.load(Ordering::Relaxed) {
+    'search: while !should_stop.load(Ordering::Relaxed) {
         for i in 0..moves.len() {
             if should_stop.load(Ordering::Relaxed) {
-                break;
+                break 'search;
             }
             board.make_move(moves[i]);
             scores[i] = -alpha_beta_search(board, depth, WORST_SCORE, BEST_SCORE, should_stop);
             board.unmake_last_move();
             if should_stop.load(Ordering::Relaxed) {
-                break;
+                break 'search;
             }
             let mut j = i;
             while j > 0 && scores[j - 1] < scores[j] {
