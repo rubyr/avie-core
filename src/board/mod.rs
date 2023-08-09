@@ -4,7 +4,6 @@ mod representation;
 
 pub use crate::board::representation::*;
 
-use crate::board::representation::*;
 static FILE_A: u64 = 0x8080808080808080u64;
 static NOT_FILE_A: u64 = !FILE_A;
 static NOT_FILE_H: u64 = !FILE_H;

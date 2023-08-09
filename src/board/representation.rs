@@ -335,7 +335,7 @@ impl BoardState {
                 PieceType::Knight(_) => move_data.capture = CapturedPiece::Knight(to_move.to),
                 PieceType::Queen(_) => move_data.capture = CapturedPiece::Queen(to_move.to),
                 PieceType::King(_) => {
-                    panic!()
+                    //panic!()
                 }
             }
         }
