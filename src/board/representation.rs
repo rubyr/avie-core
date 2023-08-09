@@ -117,7 +117,7 @@ pub(crate) fn player_from_gamestate(player: Player, gamestate: &ParsedGameState)
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Promotion {
     None,
     Knight,
@@ -126,7 +126,7 @@ pub enum Promotion {
     Queen,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Move {
     pub from: u8,
     pub to: u8,

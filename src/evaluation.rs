@@ -122,9 +122,7 @@ fn alpha_beta_search(
     return alpha;
 }
 
-pub fn choose_best_move(board: &mut BoardState, should_stop: &AtomicBool) -> (Move, i64) {
-    let mut move_data = [Move::default(); 218];
-    let moves = board.generate_moves(&mut move_data);
+pub fn choose_best_move(board: &mut BoardState, moves: &mut [Move], should_stop: &AtomicBool) -> (Move, i64) {
     if moves.is_empty() {
         if board.is_in_check() {
             return (Move::default(), WORST_SCORE);
