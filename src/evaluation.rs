@@ -135,6 +135,9 @@ pub fn choose_best_move(board: &mut BoardState, moves: &mut [Move], should_stop:
     let mut depth = 1;
     while !should_stop.load(Ordering::Relaxed) {
         for i in 0..moves.len() {
+            if should_stop.load(Ordering::Relaxed) {
+                break;
+            }
             scores[i] = -alpha_beta_search(board, depth, WORST_SCORE, BEST_SCORE, should_stop);
             let mut j = i;
             while j > 0 && scores[j - 1] < scores[j] {
