@@ -96,7 +96,9 @@ fn alpha_beta_search(
     beta: i64,
     should_stop: &AtomicBool,
 ) -> i64 {
-    if should_stop.load(Ordering::Relaxed) {}
+    if should_stop.load(Ordering::Relaxed) {
+        return alpha;
+    }
     if depth <= 0 {
         return evaluate_position(board);
     }
@@ -135,10 +137,10 @@ pub fn choose_best_move(board: &mut BoardState, moves: &mut [Move], should_stop:
     let mut depth = 1;
     while !should_stop.load(Ordering::Relaxed) {
         for i in 0..moves.len() {
+            scores[i] = -alpha_beta_search(board, depth, WORST_SCORE, BEST_SCORE, should_stop);
             if should_stop.load(Ordering::Relaxed) {
                 break;
             }
-            scores[i] = -alpha_beta_search(board, depth, WORST_SCORE, BEST_SCORE, should_stop);
             let mut j = i;
             while j > 0 && scores[j - 1] < scores[j] {
                 scores.swap(j - 1, j);
