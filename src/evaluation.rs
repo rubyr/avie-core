@@ -118,10 +118,10 @@ fn alpha_beta_search(
         }
         board.make_move(*mov);
         let score = -alpha_beta_search(board, depth - 1, -beta, -alpha, should_stop);
+        board.unmake_last_move();
         if should_stop.load(Ordering::Relaxed) {
             break;
         }
-        board.unmake_last_move();
         if score > beta {
             return beta;
         }
