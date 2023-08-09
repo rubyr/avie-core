@@ -1,3 +1,4 @@
+use crate::gamestate::{CastlingRights, File, ParsedGameState, Player, Rank};
 use nom::branch::alt;
 use nom::bytes::complete::tag;
 use nom::character::complete::{char, multispace1, one_of, u32, u8};
@@ -5,10 +6,9 @@ use nom::combinator::{opt, recognize};
 use nom::multi::{count, many1};
 use nom::sequence::{pair, preceded, terminated, tuple};
 use nom::IResult;
-use crate::gamestate::{ParsedGameState, File, Rank, Player, CastlingRights};
 
 #[cfg(test)]
-mod test{
+mod test {
     use crate::parse::*;
     #[test]
     fn fen_starting_board() {
@@ -39,7 +39,7 @@ mod test{
             })
         );
     }
-    
+
     #[test]
     fn fen_first_move() {
         let result = fen_to_game("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1");
@@ -117,9 +117,7 @@ fn calculate_piece_position(
                     let x: u8 = c.to_digit(10).unwrap() as u8;
                     result_row.append(&mut vec!['.'; x.into()]);
                 }
-                'r' | 'n' | 'b' | 'q' | 'k' | 'p'  => {
-                    result_row.push(c)
-                }
+                'r' | 'n' | 'b' | 'q' | 'k' | 'p' => result_row.push(c),
                 x => return Err(FenError::InvalidPiece(x)),
             };
         }
@@ -203,4 +201,15 @@ pub fn fen_to_game(input: &str) -> Result<ParsedGameState, FenError> {
             })
         }
     }
+}
+
+pub fn fen_string(input: &str) -> IResult<&str, &str> {
+    recognize(tuple((
+        fen_board,
+        preceded(multispace1, fen_active_player),
+        preceded(multispace1, fen_castling),
+        preceded(multispace1, fen_en_passant_target),
+        preceded(multispace1, u8),
+        preceded(multispace1, u32),
+    )))(input)
 }

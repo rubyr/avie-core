@@ -3,7 +3,7 @@ pub fn add(left: usize, right: usize) -> usize {
 }
 
 pub mod evaluation;
-mod gamestate;
+pub mod gamestate;
 pub mod parse;
 pub mod board;
 mod precomputed;
