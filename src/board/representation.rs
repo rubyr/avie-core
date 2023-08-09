@@ -1,5 +1,5 @@
-use crate::gamestate::{File, ParsedGameState, Player, Rank};
 use crate::board::*;
+use crate::gamestate::{File, ParsedGameState, Player, Rank};
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct PlayerState {
     pub king: u64,
@@ -197,7 +197,10 @@ macro_rules! match_bits {
 
 impl Default for BoardState {
     fn default() -> BoardState {
-        BoardState::new(crate::parse::fen_to_game("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap())
+        BoardState::new(
+            crate::parse::fen_to_game("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+                .unwrap(),
+        )
     }
 }
 
@@ -228,20 +231,29 @@ impl BoardState {
     }
 
     pub fn is_in_check(&self) -> bool {
-        todo!()
+        let attacked = find_opponent_attacked_squares(
+            self.all_pieces(),
+            self.opponent(),
+            &self.en_passant_target,
+            self.active_player,
+        );
+        if attacked & self.player().king != 0 {
+            return true;
+        }
+        return false;
     }
 
     pub fn player(&self) -> &PlayerState {
         match self.active_player {
             Player::Black => &self.black,
-            Player::White => &self.white
+            Player::White => &self.white,
         }
     }
 
     pub fn opponent(&self) -> &PlayerState {
         match self.active_player {
             Player::Black => &self.white,
-            Player::White => &self.black
+            Player::White => &self.black,
         }
     }
 
@@ -304,12 +316,16 @@ impl BoardState {
                 }
                 PieceType::Rook(_) => {
                     move_data.capture = CapturedPiece::Rook(to_move.to);
-                    if opponent.king_castle && opponent.king.ilog2() as u8 > to_move.to 
-                    && (opponent.king.ilog2() as u8)/8 == to_move.to/8 {
+                    if opponent.king_castle
+                        && opponent.king.ilog2() as u8 > to_move.to
+                        && (opponent.king.ilog2() as u8) / 8 == to_move.to / 8
+                    {
                         opponent.king_castle = false;
                     }
-                    if opponent.queen_castle && to_move.to > opponent.king.ilog2() as u8
-                    && (opponent.king.ilog2() as u8)/8 == to_move.to/8 {
+                    if opponent.queen_castle
+                        && to_move.to > opponent.king.ilog2() as u8
+                        && (opponent.king.ilog2() as u8) / 8 == to_move.to / 8
+                    {
                         opponent.queen_castle = false;
                     }
                 }
@@ -382,11 +398,19 @@ impl BoardState {
             }
             PieceType::King(active_player) => {
                 if player.king_castle && 1 << to_move.to & 0x0200000000000002u64 != 0 {
-                    player.rooks &= !(if active_player == Player::Black {0x0100000000000000} else {0x0000000000000001});
+                    player.rooks &= !(if active_player == Player::Black {
+                        0x0100000000000000
+                    } else {
+                        0x0000000000000001
+                    });
                     player.rooks |= 1 << (to_move.to + 1);
                 }
                 if player.queen_castle && 1 << to_move.to & 0x2000000000000020u64 != 0 {
-                    player.rooks &= !(if active_player == Player::Black {0x8000000000000000} else {0x0000000000000080});
+                    player.rooks &= !(if active_player == Player::Black {
+                        0x8000000000000000
+                    } else {
+                        0x0000000000000080
+                    });
                     player.rooks |= 1 << (to_move.to - 1);
                 }
                 player.king &= !(1 << to_move.from);
@@ -504,10 +528,12 @@ impl BoardState {
                 player.king |= 1u64 << last_move.from;
                 if last_move.to as i16 - last_move.from as i16 == 2 {
                     player.rooks &= !(1u64 << (last_move.to - 1));
-                    player.rooks |= 1u64 << ((last_move.to - File::from_square(last_move.to).to_u8()) + 7u8);
+                    player.rooks |=
+                        1u64 << ((last_move.to - File::from_square(last_move.to).to_u8()) + 7u8);
                 } else if last_move.to as i16 - last_move.from as i16 == -2 {
                     player.rooks &= !(1u64 << (last_move.to + 1));
-                    player.rooks |= 1u64 << (last_move.to - File::from_square(last_move.to).to_u8());
+                    player.rooks |=
+                        1u64 << (last_move.to - File::from_square(last_move.to).to_u8());
                 }
                 debug_assert_eq!(player.king.count_ones(), 1);
             }
@@ -580,11 +606,11 @@ impl BoardState {
                 push_mask = 0;
                 if (opponent.bishops | opponent.rooks | opponent.queens) & checked_by != 0 {
                     let square_checked_by = checked_by.ilog2() as u8;
-                    if bishop_moves(square_checked_by , all_pieces, 0) & player.king != 0 {
+                    if bishop_moves(square_checked_by, all_pieces, 0) & player.king != 0 {
                         push_mask |= bishop_moves(king_square, all_pieces, all_pieces)
                             & bishop_moves(checked_by.ilog2() as u8, all_pieces, all_pieces)
                     }
-                    if rook_moves(square_checked_by , all_pieces, 0) & player.king != 0 {
+                    if rook_moves(square_checked_by, all_pieces, 0) & player.king != 0 {
                         push_mask |= rook_moves(king_square, all_pieces, all_pieces)
                             & rook_moves(checked_by.ilog2() as u8, all_pieces, all_pieces)
                     }
@@ -629,9 +655,40 @@ impl BoardState {
             opponent.rooks | opponent.queens,
         );
 
-        generate_sliding_moves(player, all_pieces, all_player_pieces, capture_mask, push_mask, pinned_pieces, king_square, move_list, &mut move_index);
-        generate_knight_moves(player, all_player_pieces, capture_mask, push_mask, pinned_pieces, move_list, &mut move_index);
-        generate_pawn_moves(player, opponent, king_square, all_pieces, all_opponent_pieces, &self.en_passant_target, self.active_player, capture_mask, push_mask, pinned_pieces, move_list, &mut move_index);
+        generate_sliding_moves(
+            player,
+            all_pieces,
+            all_player_pieces,
+            capture_mask,
+            push_mask,
+            pinned_pieces,
+            king_square,
+            move_list,
+            &mut move_index,
+        );
+        generate_knight_moves(
+            player,
+            all_player_pieces,
+            capture_mask,
+            push_mask,
+            pinned_pieces,
+            move_list,
+            &mut move_index,
+        );
+        generate_pawn_moves(
+            player,
+            opponent,
+            king_square,
+            all_pieces,
+            all_opponent_pieces,
+            &self.en_passant_target,
+            self.active_player,
+            capture_mask,
+            push_mask,
+            pinned_pieces,
+            move_list,
+            &mut move_index,
+        );
         //after 50 turns without a capture or pawn move, *and* there is at least one legal move,
         //the game is over by the fifty-move rule.
         if self.half_counter >= 100 && move_index > 0 {
