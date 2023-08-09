@@ -195,6 +195,12 @@ macro_rules! match_bits {
     }
 }
 
+impl Default for BoardState {
+    fn default() -> BoardState {
+        BoardState::new(crate::parse::fen_to_game("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1").unwrap())
+    }
+}
+
 impl BoardState {
     pub fn new(game: ParsedGameState) -> Self {
         let black = player_from_gamestate(Player::Black, &game);
