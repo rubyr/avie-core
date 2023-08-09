@@ -114,7 +114,7 @@ fn alpha_beta_search(
     sort_moves(board, moves);
     for mov in moves {
         if should_stop.load(Ordering::Relaxed) {
-            return alpha;
+            break;
         }
         board.make_move(*mov);
         let score = -alpha_beta_search(board, depth - 1, -beta, -alpha, should_stop);
@@ -140,6 +140,9 @@ pub fn choose_best_move(board: &mut BoardState, moves: &mut [Move], should_stop:
     let mut depth = 1;
     while !should_stop.load(Ordering::Relaxed) {
         for i in 0..moves.len() {
+            if should_stop.load(Ordering::Relaxed) {
+                break;
+            }
             scores[i] = -alpha_beta_search(board, depth, WORST_SCORE, BEST_SCORE, should_stop);
             if should_stop.load(Ordering::Relaxed) {
                 break;
