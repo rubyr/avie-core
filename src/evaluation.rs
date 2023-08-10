@@ -195,7 +195,7 @@ pub fn choose_best_move(
                     beta_window = beta_window.saturating_mul(2);
                     beta = scores[i] + beta_window;
                 } else if score <= alpha {
-                    beta_window = alpha_window.saturating_mul(2);
+                    alpha_window = alpha_window.saturating_mul(2);
                     alpha = scores[i] + alpha_window;
                 }
                score =  -alpha_beta_search(board, depth, alpha, beta, should_stop);
