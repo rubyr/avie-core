@@ -198,7 +198,11 @@ pub fn choose_best_move(
                     alpha_window = alpha_window.saturating_mul(4);
                     alpha = scores[i] + alpha_window;
                 }
-               score =  -alpha_beta_search(board, depth, alpha, beta, should_stop);
+                score =  -alpha_beta_search(board, depth, alpha, beta, should_stop);
+                if should_stop.load(Ordering::Relaxed) {
+                    board.unmake_last_move();
+                    break 'search;
+                }
             }
             scores[i] = score;
             board.unmake_last_move();
