@@ -17,6 +17,7 @@ static BISHOP_SCORE: i64 = 300;
 static ROOK_SCORE: i64 = 500;
 static QUEEN_SCORE: i64 = 900;
 static KING_SCORE: i64 = 20000;
+static SEARCH_WINDOW: i64 = 50;
 
 fn reverse_bitboard(bitboard: u64, is_black: bool) -> u64 {
     if is_black {
@@ -175,8 +176,22 @@ pub fn choose_best_move(
             if should_stop.load(Ordering::Relaxed) {
                 break 'search;
             }
+            let alpha;
+            let beta;
+            if scores[i] == WORST_SCORE {
+                alpha = WORST_SCORE;
+                beta = BEST_SCORE;
+            }
+            else {
+                alpha = scores[i] - SEARCH_WINDOW;
+                beta = scores[i] + SEARCH_WINDOW;
+            }
             board.make_move(moves[i]);
-            scores[i] = -alpha_beta_search(board, depth, WORST_SCORE, BEST_SCORE, should_stop);
+            let mut score = -alpha_beta_search(board, depth, alpha, beta, should_stop);
+            if score >= beta || score <= alpha {
+               score =  -alpha_beta_search(board, depth, WORST_SCORE, BEST_SCORE, should_stop);
+            }
+            scores[i] = score;
             board.unmake_last_move();
             if should_stop.load(Ordering::Relaxed) {
                 break 'search;
