@@ -176,20 +176,29 @@ pub fn choose_best_move(
             if should_stop.load(Ordering::Relaxed) {
                 break 'search;
             }
-            let alpha;
-            let beta;
+            let mut alpha;
+            let mut beta;
+            let mut alpha_window = SEARCH_WINDOW;
+            let mut beta_window = SEARCH_WINDOW;
             if scores[i] == WORST_SCORE {
                 alpha = WORST_SCORE;
                 beta = BEST_SCORE;
             }
             else {
-                alpha = scores[i] - SEARCH_WINDOW;
-                beta = scores[i] + SEARCH_WINDOW;
+                alpha = scores[i] - alpha_window;
+                beta = scores[i] + beta_window;
             }
             board.make_move(moves[i]);
             let mut score = -alpha_beta_search(board, depth, alpha, beta, should_stop);
-            if score >= beta || score <= alpha {
-               score =  -alpha_beta_search(board, depth, WORST_SCORE, BEST_SCORE, should_stop);
+            while score >= beta || score <= alpha {
+                if score >= beta {
+                    beta_window = beta_window.saturating_mul(2);
+                    beta = scores[i] + beta_window;
+                } else if score <= alpha {
+                    beta_window = alpha_window.saturating_mul(2);
+                    alpha = scores[i] + alpha_window;
+                }
+               score =  -alpha_beta_search(board, depth, alpha, beta, should_stop);
             }
             scores[i] = score;
             board.unmake_last_move();
