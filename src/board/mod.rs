@@ -20,11 +20,10 @@ pub fn u64_to_board(board: u64) {
     println!()
 }
 
-struct BitboardIterator(u64);
+pub struct BitboardIterator(u64);
 
 impl BitboardIterator {
-    #[inline]
-    fn new(board: u64) -> Self {
+    pub fn new(board: u64) -> Self {
         Self(board)
     }
 }

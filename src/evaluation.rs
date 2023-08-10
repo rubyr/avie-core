@@ -3,9 +3,10 @@ use std::sync::atomic::Ordering;
 
 use crate::board::PlayerState;
 use crate::{
-    board::{pawn_attacks, BoardState, Move, PieceType, Promotion},
+    board::{pawn_attacks, BitboardIterator, BoardState, Move, PieceType, Promotion},
     gamestate::Player,
 };
+use crate::precomputed::square_tables::{PAWN_TABLE, KNIGHT_TABLE, BISHOP_TABLE, ROOK_TABLE, QUEEN_TABLE, KING_MIDGAME_TABLE, KING_ENDGAME_TABLE};
 
 static BEST_SCORE: i64 = i64::MAX;
 static WORST_SCORE: i64 = -i64::MAX;
@@ -16,6 +17,23 @@ static BISHOP_SCORE: i64 = 300;
 static ROOK_SCORE: i64 = 500;
 static QUEEN_SCORE: i64 = 900;
 static KING_SCORE: i64 = 20000;
+
+fn reverse_bitboard(bitboard: u64, is_black: bool) -> u64 {
+    if is_black {
+        bitboard.reverse_bits()
+    } else {
+        bitboard
+    }
+}
+
+fn position_score(player: &PlayerState, is_black: bool) -> i64 {
+    BitboardIterator::new(reverse_bitboard(player.pawns, is_black)).fold(0i64, |init, pawn| init + PAWN_TABLE[pawn as usize])
+    + BitboardIterator::new(reverse_bitboard(player.knights, is_black)).fold(0i64, |init, knight| init + KNIGHT_TABLE[knight as usize])
+    + BitboardIterator::new(reverse_bitboard(player.bishops, is_black)).fold(0i64, |init, bishop| init + BISHOP_TABLE[bishop as usize])
+    + BitboardIterator::new(reverse_bitboard(player.rooks, is_black)).fold(0i64, |init, rook| init + ROOK_TABLE[rook as usize])
+    + BitboardIterator::new(reverse_bitboard(player.queens, is_black)).fold(0i64, |init, queen| init + QUEEN_TABLE[queen as usize])
+    + BitboardIterator::new(reverse_bitboard(player.king, is_black)).fold(0i64, |init, king| init + KING_MIDGAME_TABLE[king as usize])
+}
 
 fn piece_score(player: &PlayerState) -> i64 {
     let pawns = PAWN_SCORE * player.pawns.count_ones() as i64;
@@ -30,7 +48,10 @@ fn piece_score(player: &PlayerState) -> i64 {
 fn evaluate_position(board: &mut BoardState) -> i64 {
     let player = board.player();
     let opponent = board.opponent();
-    piece_score(player) - piece_score(opponent)
+    let is_player_black = board.active_player == Player::Black;
+    let piece_score = piece_score(player) - piece_score(opponent);
+    let position_score = position_score(player, is_player_black) - position_score(opponent, !is_player_black);
+    piece_score + position_score
 }
 
 fn value_from_piece_type(piece: PieceType) -> i64 {
@@ -130,7 +151,11 @@ fn alpha_beta_search(
     return alpha;
 }
 
-pub fn choose_best_move(board: &mut BoardState, moves: &mut [Move], should_stop: &AtomicBool) -> (Move, i64) {
+pub fn choose_best_move(
+    board: &mut BoardState,
+    moves: &mut [Move],
+    should_stop: &AtomicBool,
+) -> (Move, i64) {
     let start_time = std::time::Instant::now();
     if moves.is_empty() {
         if board.is_in_check() {
