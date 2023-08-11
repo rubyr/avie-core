@@ -462,8 +462,7 @@ impl BoardState {
             Player::White => Player::Black,
         };
 
-        let moved_piece = self
-            .find_piece_on_square(last_move.to);
+        let moved_piece = self.find_piece_on_square(last_move.to);
         if moved_piece.is_none() {
             println!("move: {:?}, board: {:?}", last_move, self);
         }
@@ -558,9 +557,14 @@ impl BoardState {
         self.white.queen_castle = move_data.castling_rights.white_queenside;
         self.half_counter = move_data.halfmove_clock;
     }
+
     ///move_list is treated as a stack, and a slice of it containing the number of valid moves
     /// is returned by this function. the rest of move_list should be assumed to be invalid.
-    pub fn generate_moves<'a>(&self, move_list: &'a mut [Move; 218]) -> &'a mut [Move] {
+    pub fn generate_moves<'a>(
+        &self,
+        move_list: &'a mut [Move; 218],
+        only_loud: bool,
+    ) -> &'a mut [Move] {
         let mut move_index = 0usize;
 
         let (player, opponent) = if self.active_player == Player::Black {
@@ -573,6 +577,11 @@ impl BoardState {
         let all_opponent_pieces = opponent.all_pieces();
         let all_pieces = self.all_pieces();
         let king_square = player.king.ilog2() as u8;
+        let loud_mask = if only_loud {
+            u64::MAX & all_opponent_pieces
+        } else {
+            u64::MAX
+        };
         let attacked_squares: u64 = find_opponent_attacked_squares(
             all_pieces & !(player.king),
             opponent,
@@ -581,7 +590,12 @@ impl BoardState {
         );
         let mut king_move = king_moves(king_square, all_player_pieces);
         king_move &= !attacked_squares;
-        insert_moves(king_square as u8, king_move, move_list, &mut move_index);
+        insert_moves(
+            king_square as u8,
+            king_move & loud_mask,
+            move_list,
+            &mut move_index,
+        );
         let checked_by = pieces_checked_by(
             all_pieces,
             player,
@@ -595,14 +609,16 @@ impl BoardState {
         match checked_by.count_ones() {
             0 => {
                 //can only castle if the king is not in check.
-                let castles = king_castles(
-                    king_square,
-                    all_pieces,
-                    player.king_castle,
-                    player.queen_castle,
-                    attacked_squares,
-                );
-                insert_moves(king_square as u8, castles, move_list, &mut move_index);
+                if !only_loud {
+                    let castles = king_castles(
+                        king_square,
+                        all_pieces,
+                        player.king_castle,
+                        player.queen_castle,
+                        attacked_squares,
+                    );
+                    insert_moves(king_square as u8, castles, move_list, &mut move_index);
+                }
             }
             1 => {
                 capture_mask = checked_by;
@@ -665,6 +681,7 @@ impl BoardState {
             capture_mask,
             push_mask,
             pinned_pieces,
+            loud_mask,
             king_square,
             move_list,
             &mut move_index,
@@ -675,6 +692,7 @@ impl BoardState {
             capture_mask,
             push_mask,
             pinned_pieces,
+            loud_mask,
             move_list,
             &mut move_index,
         );
@@ -689,6 +707,7 @@ impl BoardState {
             capture_mask,
             push_mask,
             pinned_pieces,
+            loud_mask,
             move_list,
             &mut move_index,
         );

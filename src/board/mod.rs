@@ -71,7 +71,7 @@ fn find_opponent_attacked_squares(
     attacked_squares
 }
 
-fn generate_sliding_moves(player: &PlayerState, all_pieces: u64, all_player_pieces: u64, capture_mask: u64, push_mask: u64, pinned_pieces: u64, king_square: u8, move_list: &mut [Move;218], move_index: &mut usize) {
+fn generate_sliding_moves(player: &PlayerState, all_pieces: u64, all_player_pieces: u64, capture_mask: u64, push_mask: u64, pinned_pieces: u64, loud_mask: u64, king_square: u8, move_list: &mut [Move;218], move_index: &mut usize) {
     for rook in BitboardIterator::new(player.rooks) {
         let mut moves = rook_moves(rook , all_pieces, all_player_pieces)
             & (capture_mask | push_mask);
@@ -83,7 +83,7 @@ fn generate_sliding_moves(player: &PlayerState, all_pieces: u64, all_player_piec
                 moves &= rook_moves(king_square, 0, 0) & rook_moves(rook , 0, 0)
             }
         }
-        insert_moves(rook, moves, move_list, move_index);
+        insert_moves(rook, moves & loud_mask, move_list, move_index);
     }
     for bishop in BitboardIterator::new(player.bishops) {
         let mut moves = bishop_moves(bishop , all_pieces, all_player_pieces)
@@ -96,7 +96,7 @@ fn generate_sliding_moves(player: &PlayerState, all_pieces: u64, all_player_piec
                 moves &= rook_moves(king_square, 0, 0) & rook_moves(bishop , 0, 0)
             }
         }
-        insert_moves(bishop, moves, move_list, move_index);
+        insert_moves(bishop, moves & loud_mask, move_list, move_index);
     }
     for queen in BitboardIterator::new(player.queens) {
         let mut moves = queen_moves(queen , all_pieces, all_player_pieces)
@@ -109,16 +109,16 @@ fn generate_sliding_moves(player: &PlayerState, all_pieces: u64, all_player_piec
                 moves &= rook_moves(king_square, 0, 0) & rook_moves(queen , 0, 0)
             }
         }
-        insert_moves(queen, moves, move_list, move_index);
+        insert_moves(queen, moves & loud_mask, move_list, move_index);
     }
 }
 
-fn generate_knight_moves(player: &PlayerState, all_player_pieces: u64, capture_mask: u64, push_mask: u64, pinned_pieces: u64, move_list: &mut [Move; 218], move_index:&mut usize) {
+fn generate_knight_moves(player: &PlayerState, all_player_pieces: u64, capture_mask: u64, push_mask: u64, pinned_pieces: u64, loud_mask: u64, move_list: &mut [Move; 218], move_index:&mut usize) {
     for knight in BitboardIterator::new(player.knights) {
         let moves =
             knight_moves(knight , all_player_pieces) & (capture_mask | push_mask);
         if 1 << knight & pinned_pieces == 0 {
-            insert_moves(knight, moves, move_list, move_index);
+            insert_moves(knight, moves & loud_mask, move_list, move_index);
         }
     }
 }
@@ -146,7 +146,7 @@ fn pawn_promotion_moves(pawn: u8, move_: u8, move_list: &mut [Move; 218], move_i
         }
 }
 //todo!: ensure that all moves that could go to edge of board generate proper promotions!
-fn generate_pawn_moves(player: &PlayerState, opponent: &PlayerState, king_square: u8, all_pieces: u64, all_opponent_pieces: u64, en_passant_target: &EnPassantTarget, active_player: Player,capture_mask: u64, push_mask: u64, pinned_pieces: u64, move_list: &mut [Move; 218], move_index: &mut usize) {
+fn generate_pawn_moves(player: &PlayerState, opponent: &PlayerState, king_square: u8, all_pieces: u64, all_opponent_pieces: u64, en_passant_target: &EnPassantTarget, active_player: Player,capture_mask: u64, push_mask: u64, pinned_pieces: u64, loud_mask: u64, move_list: &mut [Move; 218], move_index: &mut usize) {
     let mut pawns = player.pawns;
     let pinned_pawns = pawns & pinned_pieces;
     let offset: i8 = match active_player {
@@ -161,13 +161,13 @@ fn generate_pawn_moves(player: &PlayerState, opponent: &PlayerState, king_square
             attacks[0] &= bishop_pin_mask & (capture_mask | push_mask);
             attacks[1] &= bishop_pin_mask & (capture_mask | push_mask);
             if attacks[0] != 0 {
-                for move_ in BitboardIterator::new(attacks[0]) {
+                for move_ in BitboardIterator::new(attacks[0] & loud_mask) {
                     let pawn = (move_ as i8 + (offset - 1)) as u8;
                     pawn_promotion_moves(pawn, move_, move_list, move_index, active_player);
                 }
             }
             if attacks[1] != 0 {
-                for move_ in BitboardIterator::new(attacks[1]) {
+                for move_ in BitboardIterator::new(attacks[1] & loud_mask) {
                     let pawn = (move_ as i8 + (offset + 1)) as u8;
                         pawn_promotion_moves(pawn, move_, move_list, move_index, active_player);
                 }
@@ -177,14 +177,14 @@ fn generate_pawn_moves(player: &PlayerState, opponent: &PlayerState, king_square
         if pinned_pawns & rook_pin_mask != 0 {
             let push = pawn_single_pushes(pinned_pawns, all_pieces, active_player) & rook_pin_mask & (capture_mask | push_mask);
             if push != 0 {
-                for move_ in BitboardIterator::new(push) {
+                for move_ in BitboardIterator::new(push & loud_mask) {
                     let pawn = (move_ as i8 + offset) as u8;
                     pawn_promotion_moves(pawn, move_, move_list, move_index, active_player);
                 }
             }
             let double_push = pawn_double_pushes(pinned_pawns, all_pieces, active_player) & rook_pin_mask & (capture_mask | push_mask);
             if double_push != 0 {
-                for move_ in BitboardIterator::new(double_push) {
+                for move_ in BitboardIterator::new(double_push & loud_mask) {
                     let pawn = (move_ as i8 + offset*2) as u8;
                     pawn_promotion_moves(pawn, move_, move_list, move_index, active_player);
                 }
@@ -208,10 +208,10 @@ fn generate_pawn_moves(player: &PlayerState, opponent: &PlayerState, king_square
     }
     let single_pushes = pawn_single_pushes(pawns, all_pieces, active_player) & push_mask;
     let double_pushes = pawn_double_pushes(pawns, all_pieces, active_player) & push_mask;
-    let west_attacks = BitboardIterator::new(attacks[0] & capture_mask);
-    let east_attacks = BitboardIterator::new(attacks[1] & capture_mask);
-    let pushes = BitboardIterator::new(single_pushes);
-    let double_pushes = BitboardIterator::new(double_pushes);
+    let west_attacks = BitboardIterator::new(attacks[0] & capture_mask & loud_mask);
+    let east_attacks = BitboardIterator::new(attacks[1] & capture_mask & loud_mask);
+    let pushes = BitboardIterator::new(single_pushes & loud_mask);
+    let double_pushes = BitboardIterator::new(double_pushes & loud_mask);
     
     for move_ in west_attacks {
         let pawn = (move_ as i8 + (offset - 1)) as u8;
@@ -758,7 +758,7 @@ pub fn perft(board: &mut BoardState, depth: u8) -> u64 {
         to: 0,
         promotion: Promotion::None,
     }; 218];
-    let moves = board.generate_moves(&mut move_array);
+    let moves = board.generate_moves(&mut move_array, false);
     if depth == 1 {
         return moves.len() as u64;
     };
@@ -777,7 +777,7 @@ pub fn perft_div(board: &mut BoardState, depth: u8) -> u64 {
         to: 0,
         promotion: Promotion::None,
     }; 218];
-    let moves = board.generate_moves(&mut move_array);
+    let moves = board.generate_moves(&mut move_array, false);
     if depth == 1 {
         for player_move in moves.iter().rev() {
             let move_string = move_to_algebraic(player_move, board);

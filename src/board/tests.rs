@@ -208,7 +208,7 @@ fn queen_moves_empty_board() {
 
 #[test]
 fn boardstate_new() {
-use crate::gamestate::*;
+    use crate::gamestate::*;
     let result = BoardState::new(ParsedGameState {
         piece_position: [
             ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
@@ -376,7 +376,7 @@ fn first_turn_legal_moves() {
         full_counter: 1,
         move_stack: vec![],
     };
-    let moves = board.generate_moves(&mut move_array);
+    let moves = board.generate_moves(&mut move_array, false);
     let x = moves.len();
     assert_eq!(x, 20);
 }

@@ -111,6 +111,35 @@ fn sort_moves<'a>(board: &BoardState, moves: &'a mut [Move]) -> &'a mut [Move] {
     moves
 }
 
+fn quiescence_search(board: &mut BoardState, mut alpha: i64, beta: i64, should_stop: &AtomicBool) -> i64 {
+    let mut estimate = evaluate_position(board);
+    if alpha - QUEEN_SCORE > estimate {
+        return alpha;
+    }
+    let mut move_data = [Move::default(); 218];
+    let moves = board.generate_moves(&mut move_data, true);
+    if moves.is_empty() {
+        return estimate;
+    }
+    sort_moves(board, moves);
+    for mov in moves {
+        if should_stop.load(Ordering::Relaxed) {
+            break;
+        }
+        board.make_move(*mov);
+        let score = -quiescence_search(board, -beta, -alpha, should_stop);
+        board.unmake_last_move();
+        if should_stop.load(Ordering::Relaxed) {
+            break;
+        }
+        if score > beta {
+            return beta;
+        }
+        alpha = std::cmp::max(alpha, score);
+    }
+    return alpha;
+}
+
 fn alpha_beta_search(
     board: &mut BoardState,
     depth: i64,
@@ -122,10 +151,10 @@ fn alpha_beta_search(
         return alpha;
     }
     if depth <= 0 {
-        return evaluate_position(board);
+        return quiescence_search(board, alpha, beta, should_stop);
     }
     let mut move_data = [Move::default(); 218];
-    let moves = board.generate_moves(&mut move_data);
+    let moves = board.generate_moves(&mut move_data, false);
     if moves.is_empty() {
         if board.is_in_check() {
             return WORST_SCORE;
