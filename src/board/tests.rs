@@ -28,6 +28,7 @@ fn king_moves_empty_board() {
         full_counter: 1,
         half_counter: 0,
         move_stack: vec![],
+        hash_stack: vec![]
     };
     let king_move = king_moves(board.white.king.ilog2() as u8, board.white.all_pieces());
     assert_eq!(king_move, 0x00001C141C000000);
@@ -57,6 +58,7 @@ fn king_moves_empty_board() {
         full_counter: 1,
         half_counter: 0,
         move_stack: vec![],
+        hash_stack: vec![]
     };
     let king_move = king_moves(board.white.king.ilog2() as u8, board.white.all_pieces());
     assert_eq!(king_move, 0x0000030203000000);
@@ -86,6 +88,7 @@ fn king_moves_empty_board() {
         full_counter: 1,
         half_counter: 0,
         move_stack: vec![],
+        hash_stack: vec![]
     };
     let king_move = king_moves(board.white.king.ilog2() as u8, board.white.all_pieces());
     assert_eq!(king_move, 0x0000C040C0000000);
@@ -123,6 +126,7 @@ fn king_moves_bongcloud() {
         half_counter: 0,
         full_counter: 2,
         move_stack: vec![],
+        hash_stack: vec![]
     };
     let king_move = king_moves(board.white.king.ilog2() as u8, board.white.all_pieces());
     assert_eq!(king_move, 0x0000000000000800);
@@ -156,6 +160,7 @@ fn knight_moves_empty_board() {
         full_counter: 1,
         half_counter: 0,
         move_stack: vec![],
+        hash_stack: vec![]
     };
     let mut new_knights = board.white.knights;
     let mut index = new_knights.trailing_zeros();
@@ -197,6 +202,7 @@ fn queen_moves_empty_board() {
         half_counter: 0,
         full_counter: 2,
         move_stack: vec![],
+        hash_stack: vec![]
     };
     let queen_move = queen_moves(
         board.white.queens.ilog2() as u8,
@@ -258,7 +264,8 @@ fn boardstate_new() {
             en_passant_target: EnPassantTarget(EN_PASSANT_NO_SQUARE),
             half_counter: 0,
             full_counter: 1,
-            move_stack: vec![]
+            move_stack: vec![],
+            hash_stack: vec![]
         }
     );
     let result = BoardState::new(ParsedGameState {
@@ -310,7 +317,8 @@ fn boardstate_new() {
             en_passant_target: EnPassantTarget(0x13),
             half_counter: 0,
             full_counter: 1,
-            move_stack: vec![]
+            move_stack: vec![],
+            hash_stack: vec![]
         }
     );
 }
@@ -375,6 +383,7 @@ fn first_turn_legal_moves() {
         half_counter: 0,
         full_counter: 1,
         move_stack: vec![],
+        hash_stack: vec![]
     };
     let moves = board.generate_moves(&mut move_array, false);
     let x = moves.len();

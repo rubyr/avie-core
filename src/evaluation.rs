@@ -1,12 +1,15 @@
+use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use crate::board::PlayerState;
+use crate::precomputed::square_tables::{
+    BISHOP_TABLE, KING_MIDGAME_TABLE, KNIGHT_TABLE, PAWN_TABLE, QUEEN_TABLE, ROOK_TABLE,
+};
 use crate::{
     board::{pawn_attacks, BitboardIterator, BoardState, Move, PieceType, Promotion},
     gamestate::Player,
 };
-use crate::precomputed::square_tables::{PAWN_TABLE, KNIGHT_TABLE, BISHOP_TABLE, ROOK_TABLE, QUEEN_TABLE, KING_MIDGAME_TABLE, KING_ENDGAME_TABLE};
 
 static BEST_SCORE: i64 = i64::MAX;
 static WORST_SCORE: i64 = -i64::MAX;
@@ -18,6 +21,18 @@ static ROOK_SCORE: i64 = 500;
 static QUEEN_SCORE: i64 = 900;
 static KING_SCORE: i64 = 20000;
 static SEARCH_WINDOW: i64 = 50;
+pub enum ScoreType {
+    Exact,
+    LowerBound,
+    UpperBound,
+}
+
+pub struct MoveData {
+    score: i64,
+    depth: u64,
+    score_type: ScoreType,
+    age: u64,
+}
 
 fn reverse_bitboard(bitboard: u64, is_black: bool) -> u64 {
     if is_black {
@@ -28,12 +43,18 @@ fn reverse_bitboard(bitboard: u64, is_black: bool) -> u64 {
 }
 
 fn position_score(player: &PlayerState, is_black: bool) -> i64 {
-    BitboardIterator::new(reverse_bitboard(player.pawns, is_black)).fold(0i64, |init, pawn| init + PAWN_TABLE[pawn as usize])
-    + BitboardIterator::new(reverse_bitboard(player.knights, is_black)).fold(0i64, |init, knight| init + KNIGHT_TABLE[knight as usize])
-    + BitboardIterator::new(reverse_bitboard(player.bishops, is_black)).fold(0i64, |init, bishop| init + BISHOP_TABLE[bishop as usize])
-    + BitboardIterator::new(reverse_bitboard(player.rooks, is_black)).fold(0i64, |init, rook| init + ROOK_TABLE[rook as usize])
-    + BitboardIterator::new(reverse_bitboard(player.queens, is_black)).fold(0i64, |init, queen| init + QUEEN_TABLE[queen as usize])
-    + BitboardIterator::new(reverse_bitboard(player.king, is_black)).fold(0i64, |init, king| init + KING_MIDGAME_TABLE[king as usize])
+    BitboardIterator::new(reverse_bitboard(player.pawns, is_black))
+        .fold(0i64, |init, pawn| init + PAWN_TABLE[pawn as usize])
+        + BitboardIterator::new(reverse_bitboard(player.knights, is_black))
+            .fold(0i64, |init, knight| init + KNIGHT_TABLE[knight as usize])
+        + BitboardIterator::new(reverse_bitboard(player.bishops, is_black))
+            .fold(0i64, |init, bishop| init + BISHOP_TABLE[bishop as usize])
+        + BitboardIterator::new(reverse_bitboard(player.rooks, is_black))
+            .fold(0i64, |init, rook| init + ROOK_TABLE[rook as usize])
+        + BitboardIterator::new(reverse_bitboard(player.queens, is_black))
+            .fold(0i64, |init, queen| init + QUEEN_TABLE[queen as usize])
+        + BitboardIterator::new(reverse_bitboard(player.king, is_black))
+            .fold(0i64, |init, king| init + KING_MIDGAME_TABLE[king as usize])
 }
 
 fn piece_score(player: &PlayerState) -> i64 {
@@ -51,7 +72,8 @@ fn evaluate_position(board: &mut BoardState) -> i64 {
     let opponent = board.opponent();
     let is_player_black = board.active_player == Player::Black;
     let piece_score = piece_score(player) - piece_score(opponent);
-    let position_score = position_score(player, is_player_black) - position_score(opponent, !is_player_black);
+    let position_score =
+        position_score(player, is_player_black) - position_score(opponent, !is_player_black);
     piece_score + position_score
 }
 
@@ -111,8 +133,13 @@ fn sort_moves<'a>(board: &BoardState, moves: &'a mut [Move]) -> &'a mut [Move] {
     moves
 }
 
-fn quiescence_search(board: &mut BoardState, mut alpha: i64, beta: i64, should_stop: &AtomicBool) -> i64 {
-    let mut estimate = evaluate_position(board);
+fn quiescence_search(
+    board: &mut BoardState,
+    mut alpha: i64,
+    beta: i64,
+    should_stop: &AtomicBool,
+) -> i64 {
+    let estimate = evaluate_position(board);
     if alpha - QUEEN_SCORE > estimate {
         return alpha;
     }
@@ -142,16 +169,53 @@ fn quiescence_search(board: &mut BoardState, mut alpha: i64, beta: i64, should_s
 
 fn alpha_beta_search(
     board: &mut BoardState,
-    depth: i64,
+    depth: u64,
     mut alpha: i64,
     beta: i64,
+    table: &mut HashMap<u64, MoveData>,
     should_stop: &AtomicBool,
 ) -> i64 {
     if should_stop.load(Ordering::Relaxed) {
         return alpha;
     }
+    match table.entry(board.get_hash()) {
+        std::collections::hash_map::Entry::Occupied(occupied) => {
+            let data = occupied.get();
+            if data.depth >= depth {
+                match data.score_type {
+                    ScoreType::Exact => {
+                        if data.score >= beta {
+                            return beta;
+                        }else if data.score <= alpha {
+                            return alpha;
+                        }
+                        else {
+                            return data.score;
+                        }
+                    },
+                    ScoreType::LowerBound => {
+                        if data.score >= beta {
+                            return beta;
+                        }
+                    },
+                    ScoreType::UpperBound => {
+                        if data.score <= alpha {
+                            return alpha;
+                        }
+                    },
+                }
+            }
+        },
+        std::collections::hash_map::Entry::Vacant(_) => {}
+    }
     if depth <= 0 {
-        return quiescence_search(board, alpha, beta, should_stop);
+        let score = quiescence_search(board, alpha, beta, should_stop);
+        match table.entry(board.get_hash()) {
+            std::collections::hash_map::Entry::Occupied(_) => (),
+            std::collections::hash_map::Entry::Vacant(vacant) => {
+                vacant.insert(MoveData{score, depth, score_type: ScoreType::Exact, age: board.full_counter as u64});
+            }
+        }
     }
     let mut move_data = [Move::default(); 218];
     let moves = board.generate_moves(&mut move_data, false);
@@ -168,7 +232,7 @@ fn alpha_beta_search(
             break;
         }
         board.make_move(*mov);
-        let score = -alpha_beta_search(board, depth - 1, -beta, -alpha, should_stop);
+        let score = -alpha_beta_search(board, depth - 1, -beta, -alpha, table, should_stop);
         board.unmake_last_move();
         if should_stop.load(Ordering::Relaxed) {
             break;
@@ -184,6 +248,7 @@ fn alpha_beta_search(
 pub fn choose_best_move(
     board: &mut BoardState,
     moves: &mut [Move],
+    table: &mut HashMap<u64, MoveData>,
     should_stop: &AtomicBool,
 ) -> (Move, i64) {
     let start_time = std::time::Instant::now();
@@ -212,13 +277,12 @@ pub fn choose_best_move(
             if scores[i] == WORST_SCORE {
                 alpha = WORST_SCORE;
                 beta = BEST_SCORE;
-            }
-            else {
+            } else {
                 alpha = scores[i] - alpha_window;
                 beta = scores[i] + beta_window;
             }
             board.make_move(moves[i]);
-            let mut score = -alpha_beta_search(board, depth, alpha, beta, should_stop);
+            let mut score = -alpha_beta_search(board, depth, alpha, beta, table, should_stop);
             while score >= beta || score <= alpha {
                 if score >= beta {
                     beta_window = beta_window.saturating_mul(4);
@@ -227,7 +291,7 @@ pub fn choose_best_move(
                     alpha_window = alpha_window.saturating_mul(4);
                     alpha = scores[i] + alpha_window;
                 }
-                score =  -alpha_beta_search(board, depth, alpha, beta, should_stop);
+                score = -alpha_beta_search(board, depth, alpha, beta, table, should_stop);
                 if should_stop.load(Ordering::Relaxed) {
                     board.unmake_last_move();
                     break 'search;

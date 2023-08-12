@@ -1,3 +1,8 @@
+use rand::SeedableRng;
+use rand::RngCore;
+use std::io::Write;
+
+
 static FILE_A: u64 = 0x8080808080808080u64;
 static FILE_B: u64 = 0x4040404040404040u64;
 static FILE_G: u64 = 0x0202020202020202u64;
@@ -14,7 +19,6 @@ static MAIN_DIAGONAL: u64 = 0x8040201008040201u64;
 static ANTIMAIN_DIAGONAL: u64 = 0x0102040810204080u64;
 static BISHOP_REMOVE: u64 = 0xFF818181818181FFu64;
 
-use std::io::Write;
 
 pub fn generate_knight_moves() -> String {
     let mut moves = [0u64; 64];
@@ -288,8 +292,7 @@ pub fn generate_bishop_magics(mask: &[u64; 64]) -> String {
 }
 
 fn generate_table<const BITS: u64, const SIZE: usize>(square: u64, mask: u64, piece: Piece) -> (u64, [u64; SIZE]) {
-    use rand::SeedableRng;
-    use rand::RngCore;
+    
     let mut magic = 0;
     let mut succeeded = false;
     let mut rng = rand::rngs::StdRng::seed_from_u64(0);
@@ -341,6 +344,37 @@ pub fn magic_to_index<const BITS: u64>(magic: u64, permutation: u64) -> usize {
     (permutation.wrapping_mul(magic) >> (64 - BITS)) as usize
 }
 
+fn generate_zobrist() -> String {
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+    let mut result: String = 
+    "    pub static BLACK_PAWN: usize = 0;
+    pub static BLACK_KNIGHT: usize = 1;
+    pub static BLACK_BISHOP: usize = 2;
+    pub static BLACK_ROOK: usize = 3;
+    pub static BLACK_QUEEN: usize = 4;
+    pub static BLACK_KING: usize = 5;
+    pub static WHITE_PAWN: usize = 6;
+    pub static WHITE_KNIGHT: usize = 7;
+    pub static WHITE_BISHOP: usize = 8;
+    pub static WHITE_ROOK: usize = 9;
+    pub static WHITE_QUEEN: usize = 10;
+    pub static WHITE_KING: usize = 11;
+    pub static EN_PASSANT: usize = 6; // uses range 0-7 which will never be used for white pawns
+    pub static BLACK_KING_CASTLE: [usize; 2] = [0, 56];
+    pub static BLACK_QUEEN_CASTLE: [usize; 2] = [0, 57];
+    pub static WHITE_KING_CASTLE: [usize; 2] = [0, 58];
+    pub static WHITE_QUEEN_CASTLE: [usize; 2] = [0, 59];
+    pub static ZOBRIST: [[u64; 64]; 12] = ".into();
+    let mut array = [[0u64; 64]; 12];
+    for piece in &mut array {
+        for i in piece {
+            *i = rng.next_u64();
+        }
+    };
+    result.push_str(format!("{:#?};", array).as_str());
+    result
+}
+
 fn main() {
     let knight_moves = generate_knight_moves();
     let king_moves = generate_king_moves();
@@ -350,6 +384,7 @@ fn main() {
     let bishop_mask = generate_bishop_mask();
     let bishop_magics = generate_bishop_magics(&bishop_mask);
     let rook_magics = generate_rook_magics(&rook_mask);
+    let zobrist = generate_zobrist();
     move_file.write_all("pub static KNIGHT_MOVES: [u64; 64] = ".as_bytes()).unwrap();
     move_file.write_all(knight_moves.as_bytes()).unwrap();
     move_file.write_all("pub static KING_MOVES: [u64; 64] = ".as_bytes()).unwrap();
@@ -362,4 +397,6 @@ fn main() {
     file.write_all(bishop_magics.as_bytes()).unwrap();
     let mut file = std::fs::File::create("src/precomputed/rook_magic.rs").unwrap();
     file.write_all(rook_magics.as_bytes()).unwrap();
+    let mut file = std::fs::File::create("src/precomputed/zobrist.rs").unwrap();
+    file.write_all(zobrist.as_bytes()).unwrap();
 }

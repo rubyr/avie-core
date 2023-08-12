@@ -178,6 +178,7 @@ pub struct BoardState {
     pub half_counter: u8,
     pub full_counter: u32, //pretty sure it's impossible to have a chess game go longer than 4 billion moves, but we'll see
     pub move_stack: Vec<(Move, UnmakeMoveData)>,
+    pub hash_stack: Vec<u64>,
 }
 
 macro_rules! match_bits {
@@ -209,7 +210,7 @@ impl BoardState {
         let black = player_from_gamestate(Player::Black, &game);
         let white = player_from_gamestate(Player::White, &game);
         let en_passant_target = en_passant_target(&game.en_passant_target);
-        let result = Self {
+        let mut result = Self {
             black,
             white,
             en_passant_target,
@@ -217,13 +218,155 @@ impl BoardState {
             half_counter: game.half_turn_clock,
             full_counter: game.full_turn_clock,
             move_stack: vec![],
+            hash_stack: vec![],
         };
+        result.hash_stack.push(result.create_hash());
         debug_assert!(result.is_valid());
         result
     }
 
     pub fn is_valid(&self) -> bool {
         self.white.is_valid() & self.black.is_valid()
+    }
+
+    pub fn create_hash(&self) -> u64 {
+        use crate::precomputed::zobrist::*;
+        let mut hash = 0u64;
+        for pawn in BitboardIterator::new(self.black.pawns) {
+            hash ^= ZOBRIST[BLACK_PAWN][pawn as usize];
+        }
+        for knight in BitboardIterator::new(self.black.knights) {
+            hash ^= ZOBRIST[BLACK_KNIGHT][knight as usize];
+        }
+        for bishop in BitboardIterator::new(self.black.bishops) {
+            hash ^= ZOBRIST[BLACK_BISHOP][bishop as usize];
+        }
+        for rook in BitboardIterator::new(self.black.rooks) {
+            hash ^= ZOBRIST[BLACK_ROOK][rook as usize];
+        }
+        for queen in BitboardIterator::new(self.black.queens) {
+            hash ^= ZOBRIST[BLACK_QUEEN][queen as usize];
+        }
+        for king in BitboardIterator::new(self.black.king) {
+            hash ^= ZOBRIST[BLACK_KING][king as usize];
+        }
+        for pawn in BitboardIterator::new(self.white.pawns) {
+            hash ^= ZOBRIST[WHITE_PAWN][pawn as usize];
+        }
+        for knight in BitboardIterator::new(self.white.knights) {
+            hash ^= ZOBRIST[WHITE_KNIGHT][knight as usize];
+        }
+        for bishop in BitboardIterator::new(self.white.bishops) {
+            hash ^= ZOBRIST[WHITE_BISHOP][bishop as usize];
+        }
+        for rook in BitboardIterator::new(self.white.rooks) {
+            hash ^= ZOBRIST[WHITE_ROOK][rook as usize];
+        }
+        for queen in BitboardIterator::new(self.white.queens) {
+            hash ^= ZOBRIST[WHITE_QUEEN][queen as usize];
+        }
+        for king in BitboardIterator::new(self.white.king) {
+            hash ^= ZOBRIST[WHITE_KING][king as usize];
+        }
+        if self.en_passant_target.targeted_player().is_some() {
+            hash ^= ZOBRIST[EN_PASSANT][(self.en_passant_target.targeted_square() % 8) as usize];
+        }
+        if self.black.king_castle {
+            hash ^= ZOBRIST[BLACK_KING_CASTLE[0]][BLACK_KING_CASTLE[1]];
+        }
+        if self.black.queen_castle {
+            hash ^= ZOBRIST[BLACK_QUEEN_CASTLE[0]][BLACK_QUEEN_CASTLE[1]];
+        }
+        if self.white.king_castle {
+            hash ^= ZOBRIST[WHITE_KING_CASTLE[0]][WHITE_KING_CASTLE[1]];
+        }
+        if self.white.queen_castle {
+            hash ^= ZOBRIST[WHITE_QUEEN_CASTLE[0]][WHITE_QUEEN_CASTLE[1]];
+        }
+        hash
+    }
+
+    pub fn get_hash(&self) -> u64 {
+        *self.hash_stack.last().unwrap()
+    }
+    //call after making a move only
+    fn update_hash(&mut self) {
+        let mut hash = self.hash_stack.last().expect("hash_stack should always have at least one item!").clone();
+        use crate::precomputed::zobrist::*;
+        let (mov, data) = match self.move_stack.last() {
+            Some(mov) => mov,
+            None => return,
+        };
+        let UnmakeMoveData{en_passant, castling_rights, capture,..} = data;
+        if self.en_passant_target.targeted_player().is_some() {
+            hash ^= ZOBRIST[EN_PASSANT][(self.en_passant_target.targeted_square() %8) as usize];
+        }
+        if en_passant.targeted_player().is_some() {
+            hash ^= ZOBRIST[EN_PASSANT][(en_passant.targeted_square() %8) as usize];
+        }
+        if castling_rights.black_kingside != self.black.king_castle {
+            hash ^= ZOBRIST[BLACK_KING_CASTLE[0]][BLACK_KING_CASTLE[1]];
+        }
+        if castling_rights.black_queenside != self.black.queen_castle {
+            hash ^= ZOBRIST[BLACK_QUEEN_CASTLE[0]][BLACK_QUEEN_CASTLE[1]];
+        }
+        if castling_rights.white_kingside != self.white.king_castle {
+            hash ^= ZOBRIST[WHITE_KING_CASTLE[0]][WHITE_KING_CASTLE[1]];
+        }
+        if castling_rights.white_queenside != self.white.queen_castle {
+            hash ^= ZOBRIST[WHITE_QUEEN_CASTLE[0]][WHITE_QUEEN_CASTLE[1]];
+        }
+
+        let moved_piece = self.find_piece_on_square(mov.to).expect("cannot move from an empty square!");
+        let zobrist_board = match moved_piece {
+            PieceType::Pawn(player) => match player {
+                    Player::Black => BLACK_PAWN,
+                    Player::White => WHITE_PAWN,
+                },
+            PieceType::Rook(player) => match player {
+                    Player::Black => BLACK_ROOK,
+                    Player::White => WHITE_ROOK,
+                },
+            PieceType::Knight(player) => match player {
+                    Player::Black => BLACK_KNIGHT,
+                    Player::White => WHITE_KNIGHT,
+                },
+            PieceType::Bishop(player) => match player {
+                    Player::Black => BLACK_BISHOP,
+                    Player::White => WHITE_BISHOP,
+                },
+            PieceType::Queen(player) => match player {
+                    Player::Black => BLACK_QUEEN,
+                    Player::White => WHITE_QUEEN,
+                },
+            PieceType::King(player) => {
+                if mov.from == 3  {
+                    if mov.to == 1 {
+                        hash ^= ZOBRIST[WHITE_ROOK][0];
+                        hash ^= ZOBRIST[WHITE_ROOK][2];
+                    } else if mov.to == 5 {
+                        hash ^= ZOBRIST[WHITE_ROOK][7];
+                        hash ^= ZOBRIST[WHITE_ROOK][4];
+                    }
+                }
+                if mov.from == 59 {
+                    if mov.to == 57 {
+                        hash ^= ZOBRIST[BLACK_ROOK][56];
+                        hash ^= ZOBRIST[BLACK_ROOK][58];
+                    } else if mov.to == 61 {
+                        hash ^= ZOBRIST[BLACK_ROOK][63];
+                        hash ^= ZOBRIST[BLACK_ROOK][60];
+                    }
+                }
+                match player {
+                    Player::Black => BLACK_KING,
+                    Player::White => WHITE_KING,
+                }
+            },
+        };
+        hash ^= ZOBRIST[zobrist_board][mov.from as usize];
+        hash ^= ZOBRIST[zobrist_board][mov.to as usize];
+        self.hash_stack.push(hash);
     }
 
     pub fn all_pieces(&self) -> u64 {
@@ -445,14 +588,15 @@ impl BoardState {
         } else {
             0
         };
-        self.move_stack.push((to_move, move_data))
+        self.move_stack.push((to_move, move_data));
+        self.update_hash();
     }
 
     pub fn unmake_last_move(&mut self) {
         if self.move_stack.last().is_none() {
             return;
         }
-
+        self.hash_stack.pop();
         let (last_move, move_data) = self.move_stack.pop().unwrap();
         self.active_player = match self.active_player {
             Player::Black => {
