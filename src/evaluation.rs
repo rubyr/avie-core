@@ -141,9 +141,9 @@ fn quiescence_search(
     should_stop: &AtomicBool,
 ) -> i64 {
     let estimate = evaluate_position(board);
-    if alpha.saturating_sub(QUEEN_SCORE) > estimate {
-        return alpha;
-    }
+    //if alpha != i64::MAX && alpha.saturating_sub(QUEEN_SCORE) > estimate {
+    //    return alpha;
+    //}
     let mut move_data = [Move::default(); 218];
     let moves = board.generate_moves(&mut move_data, true);
     if moves.is_empty() {
@@ -212,17 +212,17 @@ fn alpha_beta_search(
     //}
     if depth <= 0 {
         let score = quiescence_search(board, nodes, alpha, beta, should_stop);
-        match table.entry(board.get_hash()) {
-            std::collections::hash_map::Entry::Occupied(_) => (),
-            std::collections::hash_map::Entry::Vacant(vacant) => {
-                vacant.insert(MoveData {
-                    score,
-                    depth,
-                    score_type: ScoreType::Exact,
-                    age: board.full_counter as u64,
-                });
-            }
-        };
+        //match table.entry(board.get_hash()) {
+        //    std::collections::hash_map::Entry::Occupied(_) => (),
+        //    std::collections::hash_map::Entry::Vacant(vacant) => {
+        //        vacant.insert(MoveData {
+        //            score,
+        //            depth,
+        //            score_type: ScoreType::Exact,
+        //            age: board.full_counter as u64,
+        //        });
+        //    }
+        //};
         return score;
     }
     let mut move_data = [Move::default(); 218];
