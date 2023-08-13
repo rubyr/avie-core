@@ -189,26 +189,25 @@ fn alpha_beta_search(
                     ScoreType::Exact => {
                         if data.score >= beta {
                             return beta;
-                        }else if data.score <= alpha {
+                        } else if data.score <= alpha {
                             return alpha;
-                        }
-                        else {
+                        } else {
                             return data.score;
                         }
-                    },
+                    }
                     ScoreType::LowerBound => {
                         if data.score >= beta {
                             return beta;
                         }
-                    },
+                    }
                     ScoreType::UpperBound => {
                         if data.score <= alpha {
                             return alpha;
                         }
-                    },
+                    }
                 }
             }
-        },
+        }
         std::collections::hash_map::Entry::Vacant(_) => {}
     }
     if depth <= 0 {
@@ -216,7 +215,12 @@ fn alpha_beta_search(
         match table.entry(board.get_hash()) {
             std::collections::hash_map::Entry::Occupied(_) => (),
             std::collections::hash_map::Entry::Vacant(vacant) => {
-                vacant.insert(MoveData{score, depth, score_type: ScoreType::Exact, age: board.full_counter as u64});
+                vacant.insert(MoveData {
+                    score,
+                    depth,
+                    score_type: ScoreType::Exact,
+                    age: board.full_counter as u64,
+                });
             }
         };
         return score;
@@ -239,6 +243,19 @@ fn alpha_beta_search(
         board.make_move(*mov);
         let score = -alpha_beta_search(board, depth - 1, nodes, -beta, -alpha, table, should_stop);
         board.unmake_last_move();
+        match table.entry(board.get_hash()) {
+            std::collections::hash_map::Entry::Occupied(_) => (),
+            std::collections::hash_map::Entry::Vacant(vacant) => {
+                let score_type = if score > beta {
+                    ScoreType::LowerBound
+                } else if score < alpha {
+                    ScoreType::UpperBound
+                } else {
+                    ScoreType::Exact
+                };
+                vacant.insert(MoveData{score, depth, score_type, age: board.full_counter});
+            }
+        }
         if should_stop.load(Ordering::Relaxed) {
             break;
         }
@@ -270,7 +287,12 @@ pub fn choose_best_move(
     let mut depth = 1;
     'search: while !should_stop.load(Ordering::Relaxed) {
         let since_start = std::time::Instant::now() - start_time;
-        println!("info depth {} nodes {} time {}", depth, nodes, since_start.as_millis());
+        println!(
+            "info depth {} nodes {} time {}",
+            depth,
+            nodes,
+            since_start.as_millis()
+        );
         for i in 0..moves.len() {
             nodes += 1;
             if should_stop.load(Ordering::Relaxed) {
@@ -288,7 +310,15 @@ pub fn choose_best_move(
                 beta = scores[i] + beta_window;
             }
             board.make_move(moves[i]);
-            let mut score = -alpha_beta_search(board, depth, &mut nodes, WORST_SCORE, BEST_SCORE, table, should_stop);
+            let mut score = -alpha_beta_search(
+                board,
+                depth,
+                &mut nodes,
+                WORST_SCORE,
+                BEST_SCORE,
+                table,
+                should_stop,
+            );
             //while score >= beta || score <= alpha {
             //    if score >= beta {
             //        beta_window = beta_window.saturating_mul(4);
