@@ -135,6 +135,7 @@ fn sort_moves<'a>(board: &BoardState, moves: &'a mut [Move]) -> &'a mut [Move] {
 
 fn quiescence_search(
     board: &mut BoardState,
+    nodes: &mut u64,
     mut alpha: i64,
     beta: i64,
     should_stop: &AtomicBool,
@@ -151,11 +152,12 @@ fn quiescence_search(
     }
     sort_moves(board, moves);
     for mov in moves {
+        *nodes += 1;
         if should_stop.load(Ordering::Relaxed) {
             break;
         }
         board.make_move(*mov);
-        let score = -quiescence_search(board, -beta, -alpha, should_stop);
+        let score = -quiescence_search(board, nodes, -beta, -alpha, should_stop);
         board.unmake_last_move();
         if should_stop.load(Ordering::Relaxed) {
             break;
@@ -171,6 +173,7 @@ fn quiescence_search(
 fn alpha_beta_search(
     board: &mut BoardState,
     depth: u64,
+    nodes: &mut u64,
     mut alpha: i64,
     beta: i64,
     table: &mut HashMap<u64, MoveData>,
@@ -210,7 +213,7 @@ fn alpha_beta_search(
         std::collections::hash_map::Entry::Vacant(_) => {}
     }
     if depth <= 0 {
-        let score = quiescence_search(board, alpha, beta, should_stop);
+        let score = quiescence_search(board, nodes, alpha, beta, should_stop);
         match table.entry(board.get_hash()) {
             std::collections::hash_map::Entry::Occupied(_) => (),
             std::collections::hash_map::Entry::Vacant(vacant) => {
@@ -230,11 +233,12 @@ fn alpha_beta_search(
     }
     sort_moves(board, moves);
     for mov in moves {
+        *nodes += 1;
         if should_stop.load(Ordering::Relaxed) {
             break;
         }
         board.make_move(*mov);
-        let score = -alpha_beta_search(board, depth - 1, -beta, -alpha, table, should_stop);
+        let score = -alpha_beta_search(board, depth - 1, nodes, -beta, -alpha, table, should_stop);
         board.unmake_last_move();
         if should_stop.load(Ordering::Relaxed) {
             break;
@@ -263,12 +267,13 @@ pub fn choose_best_move(
     }
     sort_moves(board, moves);
     let mut scores = vec![WORST_SCORE; moves.len()];
+    let mut nodes = 0;
     let mut depth = 1;
     'search: while !should_stop.load(Ordering::Relaxed) {
-        println!("info depth {}", depth);
         let since_start = std::time::Instant::now() - start_time;
-        println!("info time {}", since_start.as_millis());
+        println!("info depth {} nodes{} time {}", depth, nodes, since_start.as_millis());
         for i in 0..moves.len() {
+            nodes += 1;
             if should_stop.load(Ordering::Relaxed) {
                 break 'search;
             }
@@ -284,7 +289,7 @@ pub fn choose_best_move(
                 beta = scores[i] + beta_window;
             }
             board.make_move(moves[i]);
-            let mut score = -alpha_beta_search(board, depth, alpha, beta, table, should_stop);
+            let mut score = -alpha_beta_search(board, depth, &mut nodes, alpha, beta, table, should_stop);
             while score >= beta || score <= alpha {
                 if score >= beta {
                     beta_window = beta_window.saturating_mul(4);
@@ -293,7 +298,7 @@ pub fn choose_best_move(
                     alpha_window = alpha_window.saturating_mul(4);
                     alpha = scores[i] + alpha_window;
                 }
-                score = -alpha_beta_search(board, depth, alpha, beta, table, should_stop);
+                score = -alpha_beta_search(board, depth, &mut nodes, alpha, beta, table, should_stop);
                 if should_stop.load(Ordering::Relaxed) {
                     board.unmake_last_move();
                     break 'search;
