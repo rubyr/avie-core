@@ -209,17 +209,15 @@ fn alpha_beta_search(
         std::collections::hash_map::Entry::Vacant(_) => {}
     }
     if depth <= 0 {
-        let score = quiescence_search(board, alpha, beta, should_stop);
+        //let score = quiescence_search(board, alpha, beta, should_stop);
+        let score = evaluate_position(board);
         match table.entry(board.get_hash()) {
             std::collections::hash_map::Entry::Occupied(_) => (),
             std::collections::hash_map::Entry::Vacant(vacant) => {
                 vacant.insert(MoveData{score, depth, score_type: ScoreType::Exact, age: board.full_counter as u64});
             }
-        }
-        if score >= beta {
-            return beta;
-        }
-        return std::cmp::max(alpha, score);
+        };
+        return score;
     }
     let mut move_data = [Move::default(); 218];
     let moves = board.generate_moves(&mut move_data, false);
