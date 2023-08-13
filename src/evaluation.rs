@@ -242,30 +242,30 @@ fn alpha_beta_search(
         }
         board.make_move(*mov);
         let score = -alpha_beta_search(board, depth - 1, nodes, -beta, -alpha, table, should_stop);
-        //match table.entry(board.get_hash()) {
-        //    std::collections::hash_map::Entry::Occupied(mut occupied) => {
-        //        if occupied.get().depth < depth {
-        //            let score_type = if score > beta {
-        //                ScoreType::LowerBound
-        //            } else if score < alpha {
-        //                ScoreType::UpperBound
-        //            } else {
-        //                ScoreType::Exact
-        //            };
-        //            occupied.insert(MoveData{score, depth, score_type, age: board.full_counter as u64});
-        //        }
-        //    },
-        //    std::collections::hash_map::Entry::Vacant(vacant) => {
-        //        let score_type = if score > beta {
-        //            ScoreType::LowerBound
-        //        } else if score < alpha {
-        //            ScoreType::UpperBound
-        //        } else {
-        //            ScoreType::Exact
-        //        };
-        //        vacant.insert(MoveData{score, depth, score_type, age: board.full_counter as u64});
-        //    }
-        //}
+        match table.entry(board.get_hash()) {
+            std::collections::hash_map::Entry::Occupied(mut occupied) => {
+                if occupied.get().depth < depth {
+                    let score_type = if score > beta {
+                        ScoreType::LowerBound
+                    } else if score < alpha {
+                        ScoreType::UpperBound
+                    } else {
+                        ScoreType::Exact
+                    };
+                    occupied.insert(MoveData{score, depth, score_type, age: board.full_counter as u64});
+                }
+            },
+            std::collections::hash_map::Entry::Vacant(vacant) => {
+                let score_type = if score > beta {
+                    ScoreType::LowerBound
+                } else if score < alpha {
+                    ScoreType::UpperBound
+                } else {
+                    ScoreType::Exact
+                };
+                vacant.insert(MoveData{score, depth, score_type, age: board.full_counter as u64});
+            }
+        }
         board.unmake_last_move();
         
         if should_stop.load(Ordering::Relaxed) {
