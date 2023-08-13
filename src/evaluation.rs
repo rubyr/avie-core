@@ -140,13 +140,12 @@ fn quiescence_search(
     should_stop: &AtomicBool,
 ) -> i64 {
     let estimate = evaluate_position(board);
-    if alpha - QUEEN_SCORE > estimate {
+    if alpha.saturating_sub(QUEEN_SCORE) > estimate {
         return alpha;
     }
     let mut move_data = [Move::default(); 218];
     let moves = board.generate_moves(&mut move_data, true);
-    let x: Vec<_> = moves.iter().map(|x| crate::board::move_to_algebraic(x, board)).collect();
-    println!("{:?}", x);
+    //let x: Vec<_> = moves.iter().map(|x| crate::board::move_to_algebraic(x, board)).collect();
     if moves.is_empty() {
         return estimate;
     }
