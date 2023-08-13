@@ -212,17 +212,17 @@ fn alpha_beta_search(
     //}
     if depth <= 0 {
         let score = quiescence_search(board, nodes, alpha, beta, should_stop);
-        //match table.entry(board.get_hash()) {
-        //    std::collections::hash_map::Entry::Occupied(_) => (),
-        //    std::collections::hash_map::Entry::Vacant(vacant) => {
-        //        vacant.insert(MoveData {
-        //            score,
-        //            depth,
-        //            score_type: ScoreType::Exact,
-        //            age: board.full_counter as u64,
-        //        });
-        //    }
-        //};
+        match table.entry(board.get_hash()) {
+            std::collections::hash_map::Entry::Occupied(_) => (),
+            std::collections::hash_map::Entry::Vacant(vacant) => {
+                vacant.insert(MoveData {
+                    score,
+                    depth,
+                    score_type: ScoreType::Exact,
+                    age: board.full_counter as u64,
+                });
+            }
+        };
         return score;
     }
     let mut move_data = [Move::default(); 218];
