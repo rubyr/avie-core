@@ -476,7 +476,7 @@ fn queen_moves(square: u8, all_pieces: u64, friendly_pieces: u64) -> u64 {
         | rook_moves(square, all_pieces, friendly_pieces)
 }
 
-fn move_to_algebraic(move_: &Move, board: &BoardState) -> String {
+pub fn move_to_algebraic(move_: &Move, board: &BoardState) -> String {
     static SQUARES: [&str; 64] = [
         "h1", "g1", "f1", "e1", "d1", "c1", "b1", "a1", "h2", "g2", "f2", "e2", "d2", "c2", "b2",
         "a2", "h3", "g3", "f3", "e3", "d3", "c3", "b3", "a3", "h4", "g4", "f4", "e4", "d4", "c4",

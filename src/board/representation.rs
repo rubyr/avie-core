@@ -722,7 +722,7 @@ impl BoardState {
         let all_pieces = self.all_pieces();
         let king_square = player.king.ilog2() as u8;
         let loud_mask = if only_loud {
-            u64::MAX & all_opponent_pieces
+            all_opponent_pieces
         } else {
             u64::MAX
         };
@@ -734,9 +734,10 @@ impl BoardState {
         );
         let mut king_move = king_moves(king_square, all_player_pieces);
         king_move &= !attacked_squares;
+        king_move &= loud_mask;
         insert_moves(
             king_square as u8,
-            king_move & loud_mask,
+            king_move,
             move_list,
             &mut move_index,
         );

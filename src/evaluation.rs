@@ -145,6 +145,8 @@ fn quiescence_search(
     }
     let mut move_data = [Move::default(); 218];
     let moves = board.generate_moves(&mut move_data, true);
+    let x: Vec<_> = moves.iter().map(|x| crate::board::move_to_algebraic(x, board)).collect();
+    println!("{:?}", x);
     if moves.is_empty() {
         return estimate;
     }
@@ -209,8 +211,7 @@ fn alpha_beta_search(
         std::collections::hash_map::Entry::Vacant(_) => {}
     }
     if depth <= 0 {
-        //let score = quiescence_search(board, alpha, beta, should_stop);
-        let score = evaluate_position(board);
+        let score = quiescence_search(board, alpha, beta, should_stop);
         match table.entry(board.get_hash()) {
             std::collections::hash_map::Entry::Occupied(_) => (),
             std::collections::hash_map::Entry::Vacant(vacant) => {
