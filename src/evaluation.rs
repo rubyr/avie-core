@@ -216,6 +216,10 @@ fn alpha_beta_search(
                 vacant.insert(MoveData{score, depth, score_type: ScoreType::Exact, age: board.full_counter as u64});
             }
         }
+        if score >= beta {
+            return beta;
+        }
+        return std::cmp::max(alpha, score);
     }
     let mut move_data = [Move::default(); 218];
     let moves = board.generate_moves(&mut move_data, false);
