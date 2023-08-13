@@ -253,7 +253,7 @@ fn alpha_beta_search(
                 } else {
                     ScoreType::Exact
                 };
-                vacant.insert(MoveData{score, depth, score_type, age: board.full_counter});
+                vacant.insert(MoveData{score, depth, score_type, age: board.full_counter as u64});
             }
         }
         if should_stop.load(Ordering::Relaxed) {
