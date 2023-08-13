@@ -146,7 +146,6 @@ fn quiescence_search(
     }
     let mut move_data = [Move::default(); 218];
     let moves = board.generate_moves(&mut move_data, true);
-    //let x: Vec<_> = moves.iter().map(|x| crate::board::move_to_algebraic(x, board)).collect();
     if moves.is_empty() {
         return estimate;
     }
@@ -271,7 +270,7 @@ pub fn choose_best_move(
     let mut depth = 1;
     'search: while !should_stop.load(Ordering::Relaxed) {
         let since_start = std::time::Instant::now() - start_time;
-        println!("info depth {} nodes{} time {}", depth, nodes, since_start.as_millis());
+        println!("info depth {} nodes {} time {}", depth, nodes, since_start.as_millis());
         for i in 0..moves.len() {
             nodes += 1;
             if should_stop.load(Ordering::Relaxed) {
