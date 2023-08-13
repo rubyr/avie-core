@@ -181,35 +181,35 @@ fn alpha_beta_search(
     if should_stop.load(Ordering::Relaxed) {
         return alpha;
     }
-    //match table.entry(board.get_hash()) {
-    //    std::collections::hash_map::Entry::Occupied(occupied) => {
-    //        let data = occupied.get();
-    //        if data.depth >= depth {
-    //            match data.score_type {
-    //                ScoreType::Exact => {
-    //                    if data.score >= beta {
-    //                        return beta;
-    //                    } else if data.score <= alpha {
-    //                        return alpha;
-    //                    } else {
-    //                        return data.score;
-    //                    }
-    //                }
-    //                ScoreType::LowerBound => {
-    //                    if data.score >= beta {
-    //                        return beta;
-    //                    }
-    //                }
-    //                ScoreType::UpperBound => {
-    //                    if data.score <= alpha {
-    //                        return alpha;
-    //                    }
-    //                }
-    //            }
-    //        }
-    //    }
-    //    std::collections::hash_map::Entry::Vacant(_) => {}
-    //}
+    match table.entry(board.get_hash()) {
+        std::collections::hash_map::Entry::Occupied(occupied) => {
+            let data = occupied.get();
+            if data.depth >= depth {
+                match data.score_type {
+                    ScoreType::Exact => {
+                        if data.score >= beta {
+                            return beta;
+                        } else if data.score <= alpha {
+                            return alpha;
+                        } else {
+                            return data.score;
+                        }
+                    }
+                    ScoreType::LowerBound => {
+                        if data.score >= beta {
+                            return beta;
+                        }
+                    }
+                    ScoreType::UpperBound => {
+                        if data.score <= alpha {
+                            return alpha;
+                        }
+                    }
+                }
+            }
+        }
+        std::collections::hash_map::Entry::Vacant(_) => {}
+    }
     if depth <= 0 {
         let score = quiescence_search(board, nodes, alpha, beta, should_stop);
         match table.entry(board.get_hash()) {
