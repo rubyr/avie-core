@@ -186,7 +186,7 @@ fn alpha_beta_search(
             let data = occupied.get();
             print!("info string attempted hash hit");
             if data.depth >= depth {
-                println!("| success! depth {} table depth {}", depth, data.depth);
+                println!(" | success! depth {} table depth {}", depth, data.depth);
                 match data.score_type {
                     ScoreType::Exact => {
                         if data.score >= beta {
@@ -242,6 +242,7 @@ fn alpha_beta_search(
         }
         board.make_move(*mov);
         let score = -alpha_beta_search(board, depth - 1, nodes, -beta, -alpha, table, should_stop);
+        board.unmake_last_move();
         match table.entry(board.get_hash()) {
             std::collections::hash_map::Entry::Occupied(mut occupied) => {
                 if occupied.get().depth < depth {
@@ -266,7 +267,6 @@ fn alpha_beta_search(
                 vacant.insert(MoveData{score, depth, score_type, age: board.full_counter as u64});
             }
         }
-        board.unmake_last_move();
         
         if should_stop.load(Ordering::Relaxed) {
             break;
