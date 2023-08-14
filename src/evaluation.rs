@@ -184,8 +184,9 @@ fn alpha_beta_search(
     match table.entry(board.get_hash()) {
         std::collections::hash_map::Entry::Occupied(occupied) => {
             let data = occupied.get();
+            print!("info string attempted hash hit");
             if data.depth >= depth {
-                println!("info string hash hit depth {} table depth {}", depth, data.depth);
+                println!("| success! depth {} table depth {}", depth, data.depth);
                 match data.score_type {
                     ScoreType::Exact => {
                         if data.score >= beta {
