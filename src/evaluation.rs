@@ -329,20 +329,20 @@ pub fn choose_best_move(
                 table,
                 should_stop,
             );
-            //while score >= beta || score <= alpha {
-            //    if score >= beta {
-            //        beta_window = beta_window.saturating_mul(4);
-            //        beta = scores[i] + beta_window;
-            //    } else if score <= alpha {
-            //        alpha_window = alpha_window.saturating_mul(4);
-            //        alpha = scores[i] + alpha_window;
-            //    }
-            //    score = -alpha_beta_search(board, depth, &mut nodes, alpha, beta, table, should_stop);
-            //    if should_stop.load(Ordering::Relaxed) {
-            //        board.unmake_last_move();
-            //        break 'search;
-            //    }
-            //}
+            while score >= beta || score <= alpha {
+                if score >= beta {
+                    beta_window = beta_window.saturating_mul(4);
+                    beta = scores[i] + beta_window;
+                } else if score <= alpha {
+                    alpha_window = alpha_window.saturating_mul(4);
+                    alpha = scores[i] + alpha_window;
+                }
+                score = -alpha_beta_search(board, depth, &mut nodes, alpha, beta, table, should_stop);
+                if should_stop.load(Ordering::Relaxed) {
+                    board.unmake_last_move();
+                    break 'search;
+                }
+            }
             scores[i] = score;
             board.unmake_last_move();
             if should_stop.load(Ordering::Relaxed) {
