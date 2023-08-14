@@ -345,7 +345,7 @@ pub fn magic_to_index<const BITS: u64>(magic: u64, permutation: u64) -> usize {
 }
 
 fn generate_zobrist() -> String {
-    let mut rng = rand::rngs::StdRng::seed_from_u64(0);
+    let mut rng = rand::rngs::StdRng::seed_from_u64(0xCC_1703_D);
     let mut result: String = 
     "    pub static BLACK_PAWN: usize = 0;
     pub static BLACK_KNIGHT: usize = 1;
