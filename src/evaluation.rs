@@ -298,10 +298,11 @@ pub fn choose_best_move(
     'search: while !should_stop.load(Ordering::Relaxed) {
         let since_start = std::time::Instant::now() - start_time;
         println!(
-            "info depth {} nodes {} time {}",
+            "info depth {} nodes {} time {} hashfull {}",
             depth,
             nodes,
-            since_start.as_millis()
+            since_start.as_millis(),
+            (table.len() * 1000) / table.capacity()
         );
         for i in 0..moves.len() {
             nodes += 1;
@@ -324,12 +325,16 @@ pub fn choose_best_move(
                 board,
                 depth,
                 &mut nodes,
-                WORST_SCORE,
-                BEST_SCORE,
+                alpha,
+                beta,
                 table,
                 should_stop,
             );
             while score >= beta || score <= alpha {
+                if should_stop.load(Ordering::Relaxed) {
+                    board.unmake_last_move();
+                    break 'search;
+                }
                 if score >= beta {
                     beta_window = beta_window.saturating_mul(4);
                     beta = scores[i] + beta_window;
@@ -338,10 +343,6 @@ pub fn choose_best_move(
                     alpha = scores[i] + alpha_window;
                 }
                 score = -alpha_beta_search(board, depth, &mut nodes, alpha, beta, table, should_stop);
-                if should_stop.load(Ordering::Relaxed) {
-                    board.unmake_last_move();
-                    break 'search;
-                }
             }
             scores[i] = score;
             board.unmake_last_move();
