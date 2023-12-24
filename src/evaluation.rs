@@ -31,7 +31,7 @@ pub struct MoveData {
     score: i64,
     depth: u64,
     score_type: ScoreType,
-    age: u64,
+    _age: u64,
 }
 
 fn reverse_bitboard(bitboard: u64, is_black: bool) -> u64 {
@@ -97,7 +97,7 @@ fn move_score(board: &BoardState, mov: &Move) -> i64 {
     if let Some(piece) = their_piece {
         let their_score = value_from_piece_type(piece);
         let our_score = value_from_piece_type(our_piece);
-        result += 10 * their_score - our_score;
+        result += their_score - (our_score/10);
     }
     result += match mov.promotion {
         Promotion::None => 0,
@@ -121,15 +121,16 @@ fn move_score(board: &BoardState, mov: &Move) -> i64 {
 }
 
 fn sort_moves<'a>(board: &BoardState, moves: &'a mut [Move]) -> &'a mut [Move] {
-    let mut scores: Vec<_> = moves.iter().map(|mov| move_score(board, mov)).collect();
-    for i in 0..moves.len() {
-        let mut j = i;
-        while j > 0 && scores[j - 1] < scores[j] {
-            scores.swap(j - 1, j);
-            moves.swap(j - 1, j);
-            j = j - 1;
-        }
-    }
+    moves.sort_by_cached_key(|mov| move_score(board, mov));
+    //let mut scores: Vec<_> = moves.iter().map(|mov| move_score(board, mov)).collect();
+    //for i in 0..moves.len() {
+    //    let mut j = i;
+    //    while j > 0 && scores[j - 1] < scores[j] {
+    //        scores.swap(j - 1, j);
+    //        moves.swap(j - 1, j);
+    //        j = j - 1;
+    //    }
+    //}
     moves
 }
 
@@ -219,7 +220,7 @@ fn alpha_beta_search(
                     score,
                     depth: 0,
                     score_type: ScoreType::Exact,
-                    age: board.full_counter as u64,
+                    _age: board.full_counter as u64,
                 });
             }
         };
@@ -251,7 +252,7 @@ fn alpha_beta_search(
                     } else {
                         ScoreType::Exact
                     };
-                    occupied.insert(MoveData{score, depth, score_type, age: board.full_counter as u64});
+                    occupied.insert(MoveData{score, depth, score_type, _age: board.full_counter as u64});
                 }
             },
             std::collections::hash_map::Entry::Vacant(vacant) => {
@@ -262,7 +263,7 @@ fn alpha_beta_search(
                 } else {
                     ScoreType::Exact
                 };
-                vacant.insert(MoveData{score, depth, score_type, age: board.full_counter as u64});
+                vacant.insert(MoveData{score, depth, score_type, _age: board.full_counter as u64});
             }
         }
         

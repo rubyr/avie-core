@@ -364,6 +364,14 @@ impl BoardState {
                 }
             },
         };
+        //match capture {
+        //    CapturedPiece::None => (),
+        //    CapturedPiece::Pawn(square) => todo!(),
+        //    CapturedPiece::Knight(square) => todo!(),
+        //    CapturedPiece::Bishop(square) => todo!(),
+        //    CapturedPiece::Rook(square) => todo!(),
+        //    CapturedPiece::Queen(square) => todo!(),
+        //};
         hash ^= ZOBRIST[zobrist_board][mov.from as usize];
         hash ^= ZOBRIST[zobrist_board][mov.to as usize];
         self.hash_stack.push(hash);
