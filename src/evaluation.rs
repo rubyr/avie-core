@@ -341,6 +341,7 @@ pub fn choose_best_move(
                     beta = scores[i] + beta_window;
                 } else if score <= alpha {
                     alpha_window = alpha_window.saturating_mul(4);
+                    println!("{}, {}", scores[i], alpha_window);
                     alpha = scores[i] + alpha_window;
                 }
                 score = -alpha_beta_search(board, depth, &mut nodes, alpha, beta, table, should_stop);
