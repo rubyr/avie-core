@@ -181,10 +181,10 @@ fn search(
         //}
         #[cfg(debug_assertions)]
         assert_eq!(before, format!("{:?}", board));
-        best_score = std::cmp::max(alpha, score);
+        alpha = std::cmp::max(alpha, score);
     }
 
-    return best_score;
+    return alpha;
 }
 
 pub fn choose_best_move(
