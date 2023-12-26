@@ -98,7 +98,7 @@ fn move_score(board: &BoardState, mov: &Move) -> i64 {
     if let Some(piece) = their_piece {
         let their_score = value_from_piece_type(piece);
         let our_score = value_from_piece_type(our_piece);
-        result += their_score - (our_score/10);
+        result += 10 * their_score - our_score;
     }
     result += match mov.promotion {
         Promotion::None => 0,
