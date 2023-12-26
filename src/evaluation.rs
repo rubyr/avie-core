@@ -168,6 +168,7 @@ fn search(
         }
         return 0; //draw
     }
+    let mut best_score = WORST_SCORE;
     for mov in moves {
         *nodes += 1;
         #[cfg(debug_assertions)]
@@ -180,10 +181,10 @@ fn search(
         //}
         #[cfg(debug_assertions)]
         assert_eq!(before, format!("{:?}", board));
-        alpha = std::cmp::max(alpha, score);
+        best_score = std::cmp::max(alpha, score);
     }
 
-    return alpha;
+    return best_score;
 }
 
 pub fn choose_best_move(
