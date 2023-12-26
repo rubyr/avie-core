@@ -121,7 +121,7 @@ fn move_score(board: &BoardState, mov: &Move) -> i64 {
 }
 
 fn sort_moves<'a>(board: &BoardState, moves: &'a mut [Move]) -> &'a mut [Move] {
-    moves.sort_by_cached_key(|mov| move_score(board, mov));
+    moves.sort_by_cached_key(|mov| -move_score(board, mov)); //want to have highest scores first
     //let mut scores: Vec<_> = moves.iter().map(|mov| move_score(board, mov)).collect();
     //for i in 0..moves.len() {
     //    let mut j = i;
