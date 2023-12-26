@@ -72,10 +72,9 @@ fn evaluate_position(board: &mut BoardState) -> i64 {
     let opponent = board.opponent();
     let is_player_black = board.active_player == Player::Black;
     let piece_score = piece_score(player) - piece_score(opponent);
-    //let position_score =
-    //    position_score(player, is_player_black) - position_score(opponent, !is_player_black);
-    //piece_score + position_score
-    piece_score
+    let position_score =
+        position_score(player, is_player_black) - position_score(opponent, !is_player_black);
+    piece_score + position_score
 }
 
 fn value_from_piece_type(piece: PieceType) -> i64 {
