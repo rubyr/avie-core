@@ -144,7 +144,7 @@ fn quiescence_search(
     todo!()
 }
 
-fn alpha_beta_search(
+fn search(
     board: &mut BoardState,
     depth: u64,
     nodes: &mut u64,
@@ -170,17 +170,18 @@ fn alpha_beta_search(
     }
     let mut best_score = WORST_SCORE;
     for mov in moves {
+        *nodes += 1;
         #[cfg(debug_assertions)]
         let before = format!("{:?}", board);
         board.make_move(*mov);
-        let score = alpha_beta_search(board, depth - 1, nodes, -beta, -alpha, table, should_stop);
+        let score = search(board, depth - 1, nodes, -beta, -alpha, table, should_stop);
         board.unmake_last_move();
         #[cfg(debug_assertions)]
         assert_eq!(before, format!("{:?}", board));
         best_score = std::cmp::max(best_score, score);
     }
 
-    return alpha;
+    return best_score;
 }
 
 pub fn choose_best_move(
@@ -205,8 +206,9 @@ pub fn choose_best_move(
     let mut best_score = WORST_SCORE;
     let mut best_score_index = 0;
     for (i, mov) in moves.iter().enumerate() {
+        nodes += 1;
         board.make_move(*mov);
-        scores[i] = alpha_beta_search(board, depth, &mut nodes, BEST_SCORE, WORST_SCORE, table, should_stop);
+        scores[i] = search(board, depth, &mut nodes, BEST_SCORE, WORST_SCORE, table, should_stop);
         board.unmake_last_move();
         if scores[i] > best_score {
             best_score = scores[i];
