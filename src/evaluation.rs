@@ -170,10 +170,12 @@ fn alpha_beta_search(
     }
     let mut best_score = WORST_SCORE;
     for mov in moves {
+        #[cfg(debug_assertions)]
         let before = format!("{:?}", board);
         board.make_move(*mov);
         let score = alpha_beta_search(board, depth - 1, nodes, -beta, -alpha, table, should_stop);
         board.unmake_last_move();
+        #[cfg(debug_assertions)]
         assert_eq!(before, format!("{:?}", board));
         best_score = std::cmp::max(best_score, score);
     }
