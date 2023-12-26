@@ -168,6 +168,7 @@ fn search(
         }
         return 0; //draw
     }
+    sort_moves(board, moves);
     for mov in moves {
         *nodes += 1;
         #[cfg(debug_assertions)]
@@ -206,6 +207,7 @@ pub fn choose_best_move(
     let depth = 4;
     let mut best_score = WORST_SCORE;
     let mut best_score_index = 0;
+    sort_moves(board, moves);
     for (i, mov) in moves.iter().enumerate() {
         nodes += 1;
         board.make_move(*mov);
