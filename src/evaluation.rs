@@ -195,7 +195,7 @@ pub fn choose_best_move(
     }
     let mut scores = vec![WORST_SCORE; moves.len()];
     let mut nodes = 0;
-    let depth = 4;
+    let depth = 5;
     let mut best_score = WORST_SCORE;
     let mut best_score_index = 0;
     sort_moves(board, moves);
