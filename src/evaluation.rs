@@ -208,7 +208,7 @@ pub fn choose_best_move(
     for (i, mov) in moves.iter().enumerate() {
         nodes += 1;
         board.make_move(*mov);
-        scores[i] = search(board, depth, &mut nodes, BEST_SCORE, WORST_SCORE, table, should_stop);
+        scores[i] = search(board, depth - 1, &mut nodes, BEST_SCORE, WORST_SCORE, table, should_stop);
         board.unmake_last_move();
         if scores[i] > best_score {
             best_score = scores[i];
