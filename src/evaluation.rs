@@ -3,6 +3,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use crate::board::PlayerState;
+use crate::board::move_to_algebraic;
 use crate::precomputed::square_tables::{
     BISHOP_TABLE, KING_MIDGAME_TABLE, KNIGHT_TABLE, PAWN_TABLE, QUEEN_TABLE, ROOK_TABLE,
 };
@@ -222,5 +223,9 @@ pub fn choose_best_move(
         nodes,
         (std::time::Instant::now() - start_time).as_millis()
     );
+    for i in 0..moves.len() {
+        print!("{}: {}, ", move_to_algebraic(&moves[i], board), scores[i]);
+    }
+    println!("");
     return (moves[best_score_index], scores[best_score_index]);
 }
