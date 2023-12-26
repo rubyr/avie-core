@@ -170,8 +170,11 @@ fn alpha_beta_search(
     }
     let mut best_score = WORST_SCORE;
     for mov in moves {
+        let before = format!("{:?}", board);
         board.make_move(*mov);
         let score = alpha_beta_search(board, depth - 1, nodes, -beta, -alpha, table, should_stop);
+        board.unmake_last_move();
+        assert_eq!(before, format!("{:?}", board));
         best_score = std::cmp::max(best_score, score);
     }
 
@@ -196,7 +199,7 @@ pub fn choose_best_move(
     sort_moves(board, moves);
     let mut scores = vec![WORST_SCORE; moves.len()];
     let mut nodes = 0;
-    let mut depth = 4;
+    let depth = 4;
     let mut best_score = WORST_SCORE;
     let mut best_score_index = 0;
     for (i, mov) in moves.iter().enumerate() {
@@ -208,9 +211,7 @@ pub fn choose_best_move(
             best_score_index = i;
         }
     }
-    println!(
-        "info depth {} nodes {} time {}",
-        depth,
+    println!("info depth 4 nodes {} time {}",
         nodes,
         (std::time::Instant::now() - start_time).as_millis()
     );
