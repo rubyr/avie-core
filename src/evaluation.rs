@@ -20,7 +20,6 @@ static BISHOP_SCORE: i64 = 300;
 static ROOK_SCORE: i64 = 500;
 static QUEEN_SCORE: i64 = 900;
 static KING_SCORE: i64 = 20000;
-static SEARCH_WINDOW: i64 = 50;
 pub enum ScoreType {
     Exact,
     LowerBound,
@@ -36,7 +35,7 @@ pub struct MoveData {
 
 fn reverse_bitboard(bitboard: u64, is_black: bool) -> u64 {
     if is_black {
-        bitboard.reverse_bits()
+        bitboard.swap_bytes()
     } else {
         bitboard
     }
@@ -72,9 +71,10 @@ fn evaluate_position(board: &mut BoardState) -> i64 {
     let opponent = board.opponent();
     let is_player_black = board.active_player == Player::Black;
     let piece_score = piece_score(player) - piece_score(opponent);
-    let position_score =
-        position_score(player, is_player_black) - position_score(opponent, !is_player_black);
-    piece_score + position_score
+    //let position_score =
+    //    position_score(player, is_player_black) - position_score(opponent, !is_player_black);
+    //piece_score + position_score
+    piece_score
 }
 
 fn value_from_piece_type(piece: PieceType) -> i64 {
@@ -141,33 +141,7 @@ fn quiescence_search(
     beta: i64,
     should_stop: &AtomicBool,
 ) -> i64 {
-    let estimate = evaluate_position(board);
-    //if alpha != i64::MAX && alpha.saturating_sub(QUEEN_SCORE) > estimate {
-    //    return alpha;
-    //}
-    let mut move_data = [Move::default(); 218];
-    let moves = board.generate_moves(&mut move_data, true);
-    if moves.is_empty() {
-        return estimate;
-    }
-    sort_moves(board, moves);
-    for mov in moves {
-        *nodes += 1;
-        if should_stop.load(Ordering::Relaxed) {
-            break;
-        }
-        board.make_move(*mov);
-        let score = -quiescence_search(board, nodes, -beta, -alpha, should_stop);
-        board.unmake_last_move();
-        if should_stop.load(Ordering::Relaxed) {
-            break;
-        }
-        if score > beta {
-            return beta;
-        }
-        alpha = std::cmp::max(alpha, score);
-    }
-    return alpha;
+    todo!()
 }
 
 fn alpha_beta_search(
@@ -182,99 +156,25 @@ fn alpha_beta_search(
     if should_stop.load(Ordering::Relaxed) {
         return alpha;
     }
-    match table.entry(board.get_hash()) {
-        std::collections::hash_map::Entry::Occupied(occupied) => {
-            let data = occupied.get();
-            if data.depth >= depth {
-                match data.score_type {
-                    ScoreType::Exact => {
-                        if data.score >= beta {
-                            return beta;
-                        } else if data.score <= alpha {
-                            return alpha;
-                        } else {
-                            return data.score;
-                        }
-                    }
-                    ScoreType::LowerBound => {
-                        if data.score >= beta {
-                            return beta;
-                        }
-                    }
-                    ScoreType::UpperBound => {
-                        if data.score <= alpha {
-                            return alpha;
-                        }
-                    }
-                }
-            }
-        }
-        std::collections::hash_map::Entry::Vacant(_) => {}
+
+    if depth == 0 {
+        return evaluate_position(board);
     }
-    if depth <= 0 {
-        let score = quiescence_search(board, nodes, alpha, beta, should_stop);
-        match table.entry(board.get_hash()) {
-            std::collections::hash_map::Entry::Occupied(_) => (),
-            std::collections::hash_map::Entry::Vacant(vacant) => {
-                vacant.insert(MoveData {
-                    score,
-                    depth: 0,
-                    score_type: ScoreType::Exact,
-                    _age: board.full_counter as u64,
-                });
-            }
-        };
-        return score;
-    }
-    let mut move_data = [Move::default(); 218];
-    let moves = board.generate_moves(&mut move_data, false);
+    let mut moves = [Move::default(); 218];
+    let moves = board.generate_moves(&mut moves, false);
     if moves.is_empty() {
-        if !board.is_in_check() {
-            return 0;
+        if board.is_in_check() {
+            return WORST_SCORE;
         }
+        return 0; //draw
     }
-    sort_moves(board, moves);
+    let mut best_score = WORST_SCORE;
     for mov in moves {
-        *nodes += 1;
-        if should_stop.load(Ordering::Relaxed) {
-            break;
-        }
         board.make_move(*mov);
-        let score = -alpha_beta_search(board, depth - 1, nodes, -beta, -alpha, table, should_stop);
-        board.unmake_last_move();
-        match table.entry(board.get_hash()) {
-            std::collections::hash_map::Entry::Occupied(mut occupied) => {
-                if occupied.get().depth < depth {
-                    let score_type = if score > beta {
-                        ScoreType::LowerBound
-                    } else if score < alpha {
-                        ScoreType::UpperBound
-                    } else {
-                        ScoreType::Exact
-                    };
-                    occupied.insert(MoveData{score, depth, score_type, _age: board.full_counter as u64});
-                }
-            },
-            std::collections::hash_map::Entry::Vacant(vacant) => {
-                let score_type = if score > beta {
-                    ScoreType::LowerBound
-                } else if score < alpha {
-                    ScoreType::UpperBound
-                } else {
-                    ScoreType::Exact
-                };
-                vacant.insert(MoveData{score, depth, score_type, _age: board.full_counter as u64});
-            }
-        }
-        
-        if should_stop.load(Ordering::Relaxed) {
-            break;
-        }
-        if score > beta {
-            return beta;
-        }
-        alpha = std::cmp::max(alpha, score);
+        let score = alpha_beta_search(board, depth - 1, nodes, -beta, -alpha, table, should_stop);
+        best_score = std::cmp::max(best_score, score);
     }
+
     return alpha;
 }
 
@@ -284,6 +184,7 @@ pub fn choose_best_move(
     table: &mut HashMap<u64, MoveData>,
     should_stop: &AtomicBool,
 ) -> (Move, i64) {
+    let mut nodes = 0;
     let start_time = std::time::Instant::now();
     if moves.is_empty() {
         if board.is_in_check() {
@@ -295,70 +196,23 @@ pub fn choose_best_move(
     sort_moves(board, moves);
     let mut scores = vec![WORST_SCORE; moves.len()];
     let mut nodes = 0;
-    let mut depth = 1;
-    'search: while !should_stop.load(Ordering::Relaxed) {
-        let since_start = std::time::Instant::now() - start_time;
-        println!(
-            "info depth {} nodes {} time {} hashfull {}",
-            depth,
-            nodes,
-            since_start.as_millis(),
-            (table.len() * 1000) / table.capacity()
-        );
-        for i in 0..moves.len() {
-            nodes += 1;
-            if should_stop.load(Ordering::Relaxed) {
-                break 'search;
-            }
-            let mut alpha;
-            let mut beta;
-            let mut alpha_window = SEARCH_WINDOW;
-            let mut beta_window = SEARCH_WINDOW;
-            if scores[i] == WORST_SCORE {
-                alpha = WORST_SCORE;
-                beta = BEST_SCORE;
-            } else {
-                alpha = scores[i] - alpha_window;
-                beta = scores[i] + beta_window;
-            }
-            board.make_move(moves[i]);
-            let mut score = -alpha_beta_search(
-                board,
-                depth,
-                &mut nodes,
-                alpha,
-                beta,
-                table,
-                should_stop,
-            );
-            while score >= beta || score <= alpha {
-                if should_stop.load(Ordering::Relaxed) {
-                    board.unmake_last_move();
-                    break 'search;
-                }
-                if score >= beta {
-                    beta_window = beta_window.saturating_mul(4);
-                    beta = scores[i] + beta_window;
-                } else if score <= alpha {
-                    alpha_window = alpha_window.saturating_mul(4);
-                    println!("{}, {}", scores[i], alpha_window);
-                    alpha = scores[i] + alpha_window;
-                }
-                score = -alpha_beta_search(board, depth, &mut nodes, alpha, beta, table, should_stop);
-            }
-            scores[i] = score;
-            board.unmake_last_move();
-            if should_stop.load(Ordering::Relaxed) {
-                break 'search;
-            }
-            let mut j = i;
-            while j > 0 && scores[j - 1] < scores[j] {
-                scores.swap(j - 1, j);
-                moves.swap(j - 1, j);
-                j = j - 1;
-            }
+    let mut depth = 4;
+    let mut best_score = WORST_SCORE;
+    let mut best_score_index = 0;
+    for (i, mov) in moves.iter().enumerate() {
+        board.make_move(*mov);
+        scores[i] = alpha_beta_search(board, depth, &mut nodes, BEST_SCORE, WORST_SCORE, table, should_stop);
+        board.unmake_last_move();
+        if scores[i] > best_score {
+            best_score = scores[i];
+            best_score_index = i;
         }
-        depth += 1;
     }
-    return (moves[0], scores[0]);
+    println!(
+        "info depth {} nodes {} time {}",
+        depth,
+        nodes,
+        (std::time::Instant::now() - start_time).as_millis()
+    );
+    return (moves[best_score_index], scores[best_score_index]);
 }
