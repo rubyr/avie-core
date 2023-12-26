@@ -215,6 +215,10 @@ pub fn choose_best_move(
         (std::time::Instant::now() - start_time).as_millis()
     );
     for i in 0..moves.len() {
+        print!("{}: {}, ", move_to_algebraic(&moves[i], board), -move_score(board, &moves[i]));
+    }
+    println!("");
+    for i in 0..moves.len() {
         print!("{}: {}, ", move_to_algebraic(&moves[i], board), scores[i]);
     }
     println!("");
