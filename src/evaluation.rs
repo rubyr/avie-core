@@ -174,7 +174,7 @@ fn search(
         #[cfg(debug_assertions)]
         let before = format!("{:?}", board);
         board.make_move(*mov);
-        let score = search(board, depth - 1, nodes, -beta, -alpha, table, should_stop);
+        let score = -search(board, depth - 1, nodes, -beta, -alpha, table, should_stop);
         board.unmake_last_move();
         //if score >= beta {
         //    return beta;
@@ -210,7 +210,7 @@ pub fn choose_best_move(
     for (i, mov) in moves.iter().enumerate() {
         nodes += 1;
         board.make_move(*mov);
-        scores[i] = search(board, depth - 1, &mut nodes, WORST_SCORE, BEST_SCORE, table, should_stop);
+        scores[i] = -search(board, depth - 1, &mut nodes, WORST_SCORE, BEST_SCORE, table, should_stop);
         board.unmake_last_move();
         if scores[i] > best_score {
             best_score = scores[i];
