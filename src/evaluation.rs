@@ -123,15 +123,6 @@ fn move_score(board: &BoardState, mov: &Move) -> i64 {
 
 fn sort_moves<'a>(board: &BoardState, moves: &'a mut [Move]) -> &'a mut [Move] {
     moves.sort_by_cached_key(|mov| -move_score(board, mov)); //want to have highest scores first
-    //let mut scores: Vec<_> = moves.iter().map(|mov| move_score(board, mov)).collect();
-    //for i in 0..moves.len() {
-    //    let mut j = i;
-    //    while j > 0 && scores[j - 1] < scores[j] {
-    //        scores.swap(j - 1, j);
-    //        moves.swap(j - 1, j);
-    //        j = j - 1;
-    //    }
-    //}
     moves
 }
 
@@ -208,7 +199,7 @@ pub fn choose_best_move(
     let depth = 4;
     let mut best_score = WORST_SCORE;
     let mut best_score_index = 0;
-    sort_moves(board, moves);
+    //sort_moves(board, moves);
     for (i, mov) in moves.iter().enumerate() {
         nodes += 1;
         board.make_move(*mov);
