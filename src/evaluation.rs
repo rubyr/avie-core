@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
-use crate::board::PlayerState;
 use crate::board::move_to_algebraic;
+use crate::board::PlayerState;
 use crate::precomputed::square_tables::{
     BISHOP_TABLE, KING_MIDGAME_TABLE, KNIGHT_TABLE, PAWN_TABLE, QUEEN_TABLE, ROOK_TABLE,
 };
@@ -193,33 +193,49 @@ pub fn choose_best_move(
             return (Move::default(), 0);
         }
     }
-    let mut scores = vec![WORST_SCORE; moves.len()];
     let mut nodes = 0;
-    let depth = 5;
+    let mut depth = 0;
     let mut best_score = WORST_SCORE;
+    let mut best_score_depth = depth;
     let mut best_score_index = 0;
-    sort_moves(board, moves);
-    for (i, mov) in moves.iter().enumerate() {
-        nodes += 1;
-        board.make_move(*mov);
-        scores[i] = -search(board, depth - 1, &mut nodes, WORST_SCORE, BEST_SCORE, table, should_stop);
-        board.unmake_last_move();
-        if scores[i] > best_score {
-            best_score = scores[i];
-            best_score_index = i;
+    while !should_stop.load(Ordering::Relaxed) {
+        depth += 1;
+        let mut scores = vec![WORST_SCORE; moves.len()];
+        
+        sort_moves(board, moves);
+        for (i, mov) in moves.iter().enumerate() {
+            nodes += 1;
+            board.make_move(*mov);
+            scores[i] = -search(
+                board,
+                depth - 1,
+                &mut nodes,
+                WORST_SCORE,
+                BEST_SCORE,
+                table,
+                should_stop,
+            );
+            board.unmake_last_move();
+            if depth > best_score_depth || scores[i] > best_score {
+                best_score = scores[i];
+                best_score_index = i;
+                best_score_depth = depth;
+            }
         }
     }
-    println!("info depth 4 nodes {} time {}",
+    println!(
+        "info depth {} nodes {} time {}",
+        depth,
         nodes,
         (std::time::Instant::now() - start_time).as_millis()
     );
+
     for i in 0..moves.len() {
-        print!("{}: {}, ", move_to_algebraic(&moves[i], board), -move_score(board, &moves[i]));
+        print!(
+            "{}: {}, ",
+            move_to_algebraic(&moves[i], board),
+            -move_score(board, &moves[i])
+        );
     }
-    println!("");
-    for i in 0..moves.len() {
-        print!("{}: {}, ", move_to_algebraic(&moves[i], board), scores[i]);
-    }
-    println!("");
-    return (moves[best_score_index], scores[best_score_index]);
+    return (moves[best_score_index], best_score);
 }
