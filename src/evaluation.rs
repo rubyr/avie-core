@@ -196,17 +196,13 @@ pub fn choose_best_move(
     let mut nodes = 0;
     let mut depth = 0;
     let mut best_score = WORST_SCORE;
-    let mut best_score_depth = depth;
-    let mut best_score_index = 0;
     while !should_stop.load(Ordering::Relaxed) {
-        depth += 1;
-        let mut scores = vec![WORST_SCORE; moves.len()];
-        
+        depth += 1;        
         sort_moves(board, moves);
-        for (i, mov) in moves.iter().enumerate() {
+        for i in 0..moves.len() {
             nodes += 1;
-            board.make_move(*mov);
-            scores[i] = -search(
+            board.make_move(moves[i]);
+            let score = -search(
                 board,
                 depth - 1,
                 &mut nodes,
@@ -216,10 +212,15 @@ pub fn choose_best_move(
                 should_stop,
             );
             board.unmake_last_move();
-            if depth > best_score_depth || scores[i] > best_score {
-                best_score = scores[i];
-                best_score_index = i;
-                best_score_depth = depth;
+            if score > best_score {
+                best_score = score;
+                //ensures that the first move of the principal variation is always in index 0
+                //mandatory for iterative deepening to produce correct results
+                //unsure if this is the best solution considering that larger upsets will push previously good moves
+                //very far back in the search, potentially causing it to repeatedly move the same two moves back and forth
+                //at alternating depths.
+                //however, if the move ordering heuristic is high quality, this should be rare.
+                moves.swap(0, i);
             }
         }
     }
@@ -237,5 +238,5 @@ pub fn choose_best_move(
             -move_score(board, &moves[i])
         );
     }
-    return (moves[best_score_index], best_score);
+    return (moves[0], best_score);
 }
