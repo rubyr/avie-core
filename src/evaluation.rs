@@ -209,6 +209,7 @@ pub fn choose_best_move(
             );
             board.unmake_last_move();
             if score > best_score {
+                println!("best: {}, current: {}", best_score, score);
                 best_score = score;
                 //ensures that the first move of the principal variation is always in index 0
                 //mandatory for iterative deepening to produce correct results
