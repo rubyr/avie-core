@@ -162,16 +162,12 @@ fn search(
     sort_moves(board, moves);
     for mov in moves {
         *nodes += 1;
-        #[cfg(debug_assertions)]
-        let before = format!("{:?}", board);
         board.make_move(*mov);
         let score = -search(board, depth - 1, nodes, -beta, -alpha, table, should_stop);
         board.unmake_last_move();
         if score >= beta {
             return beta;
         }
-        #[cfg(debug_assertions)]
-        assert_eq!(before, format!("{:?}", board));
         alpha = std::cmp::max(alpha, score);
     }
 
@@ -197,7 +193,7 @@ pub fn choose_best_move(
     let mut depth = 0;
     let mut best_score = WORST_SCORE;
     while !should_stop.load(Ordering::Relaxed) {
-        depth += 1;        
+        depth += 1;
         sort_moves(board, moves);
         for i in 0..moves.len() {
             nodes += 1;
