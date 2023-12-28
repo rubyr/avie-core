@@ -74,7 +74,7 @@ fn evaluate_position(board: &mut BoardState) -> i64 {
     let piece_score = piece_score(player) - piece_score(opponent);
     let position_score =
         position_score(player, is_player_black) - position_score(opponent, !is_player_black);
-    piece_score + position_score
+    piece_score //+ position_score
 }
 
 fn value_from_piece_type(piece: PieceType) -> i64 {
@@ -192,8 +192,8 @@ pub fn choose_best_move(
     let mut nodes = 0;
     let mut depth = 0;
     let mut best_score = WORST_SCORE;
+    let depth = 4;
     while !should_stop.load(Ordering::Relaxed) {
-        depth += 1;
         //sort_moves(board, moves);
         for i in 0..moves.len() {
             nodes += 1;
