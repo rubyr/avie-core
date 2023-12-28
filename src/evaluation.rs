@@ -159,7 +159,7 @@ fn search(
         }
         return 0; //draw
     }
-    sort_moves(board, moves);
+    //sort_moves(board, moves);
     for mov in moves {
         *nodes += 1;
         board.make_move(*mov);
@@ -194,7 +194,7 @@ pub fn choose_best_move(
     let mut best_score = WORST_SCORE;
     while !should_stop.load(Ordering::Relaxed) {
         depth += 1;
-        sort_moves(board, moves);
+        //sort_moves(board, moves);
         for i in 0..moves.len() {
             nodes += 1;
             board.make_move(moves[i]);
@@ -212,7 +212,6 @@ pub fn choose_best_move(
                 break;
             }
             if score > best_score {
-                println!("best: {}, current: {}", best_score, score);
                 best_score = score;
                 //ensures that the first move of the principal variation is always in index 0
                 //mandatory for iterative deepening to produce correct results
