@@ -208,6 +208,9 @@ pub fn choose_best_move(
                 should_stop,
             );
             board.unmake_last_move();
+            if should_stop.load(Ordering::Relaxed) {
+                break;
+            }
             if score > best_score {
                 println!("best: {}, current: {}", best_score, score);
                 best_score = score;
