@@ -145,7 +145,7 @@ fn search(
     should_stop: &AtomicBool,
 ) -> i64 {
     if should_stop.load(Ordering::Relaxed) {
-        return alpha;
+        return WORST_SCORE;
     }
 
     if depth == 0 {
