@@ -159,7 +159,7 @@ fn search(
         }
         return 0; //draw
     }
-    //sort_moves(board, moves);
+    sort_moves(board, moves);
     for mov in moves {
         *nodes += 1;
         board.make_move(*mov);
@@ -192,7 +192,7 @@ pub fn choose_best_move(
     let mut nodes = 0;
     let mut depth = 0;
     let mut best_score = WORST_SCORE;
-    //sort_moves(board, moves);
+    sort_moves(board, moves);
     while !should_stop.load(Ordering::Relaxed) {
         depth += 1;
         for i in 0..moves.len() {
@@ -212,6 +212,7 @@ pub fn choose_best_move(
                 break;
             }
             if score > best_score {
+                println!("new best move: {}, new score: {}, old score: {}", move_to_algebraic(&moves[i], board), score, best_score);
                 best_score = score;
                 //ensures that the first move of the principal variation is always in index 0
                 //mandatory for iterative deepening to produce correct results
