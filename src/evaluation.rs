@@ -159,7 +159,7 @@ fn search(
         }
         return 0; //draw
     }
-    //sort_moves(board, moves);
+    sort_moves(board, moves);
     for mov in moves {
         *nodes += 1;
         board.make_move(*mov);
@@ -193,8 +193,8 @@ pub fn choose_best_move(
     let mut depth = 0;
     let mut best_score = WORST_SCORE;
     let depth = 4;
+    sort_moves(board, moves);
     while !should_stop.load(Ordering::Relaxed) {
-        //sort_moves(board, moves);
         for i in 0..moves.len() {
             nodes += 1;
             board.make_move(moves[i]);
