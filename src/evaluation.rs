@@ -132,7 +132,22 @@ fn quiescence_search(
     beta: i64,
     should_stop: &AtomicBool,
 ) -> i64 {
-    todo!()
+    //stand_pat should be skipped if in lategame
+    let stand_pat = evaluate_position(board);
+    let mut moves = [Move::default(); 218];
+    let moves = board.generate_moves(&mut moves, true);
+    sort_moves(board, moves);
+    for mov in moves {
+        *nodes += 1;
+        board.make_move(*mov);
+        let score = -quiescence_search(board, nodes, alpha, beta, should_stop);
+        board.unmake_last_move();
+        if score >= beta {
+            return beta;
+        }
+        alpha = std::cmp::max(alpha, score);
+    }
+    std::cmp::max(stand_pat, alpha)
 }
 
 fn search(
@@ -149,7 +164,7 @@ fn search(
     }
 
     if depth == 0 {
-        return evaluate_position(board);
+        return quiescence_search(board, nodes, -beta, -alpha, should_stop);
     }
     let mut moves = [Move::default(); 218];
     let moves = board.generate_moves(&mut moves, false);
@@ -159,15 +174,15 @@ fn search(
         }
         return 0; //draw
     }
-    //sort_moves(board, moves);
+    sort_moves(board, moves);
     for mov in moves {
         *nodes += 1;
         board.make_move(*mov);
         let score = -search(board, depth - 1, nodes, -beta, -alpha, table, should_stop);
         board.unmake_last_move();
-        //if score >= beta {
-        //    return beta;
-        //}
+        if score >= beta {
+            return beta;
+        }
         alpha = std::cmp::max(alpha, score);
     }
 
@@ -192,7 +207,7 @@ pub fn choose_best_move(
     let mut nodes = 0;
     let mut depth = 0;
     let mut best_score = WORST_SCORE;
-    //sort_moves(board, moves);
+    sort_moves(board, moves);
     while !should_stop.load(Ordering::Relaxed) {
         depth += 1;
         for i in 0..moves.len() {
@@ -212,7 +227,7 @@ pub fn choose_best_move(
                 break;
             }
             if score > best_score {
-                println!("new best move: {}, new score: {}, old score: {}", move_to_algebraic(&moves[i], board), score, best_score);
+                println!("depth: {}, new best move: {}, new score: {}, old score: {}", depth, move_to_algebraic(&moves[i], board), score, best_score);
                 best_score = score;
                 //ensures that the first move of the principal variation is always in index 0
                 //mandatory for iterative deepening to produce correct results
