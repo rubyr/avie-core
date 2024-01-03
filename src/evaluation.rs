@@ -132,6 +132,7 @@ fn quiescence_search(
     beta: i64,
     should_stop: &AtomicBool,
 ) -> i64 {
+    return evaluate_position(board);
     //stand_pat should be skipped if in lategame
     if should_stop.load(Ordering::Relaxed) {
         return WORST_SCORE;
