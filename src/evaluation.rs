@@ -137,13 +137,12 @@ fn quiescence_search(
         return WORST_SCORE;
     }
     let stand_pat = evaluate_position(board);
-    let mut moves = [Move::default(); 218];
-    let moves = board.generate_moves(&mut moves, true);
-    sort_moves(board, moves);
+    let mut move_list = [Move::default(); 218];
+    let moves = board.generate_moves(&mut move_list, true);
     for mov in moves {
         *nodes += 1;
         board.make_move(*mov);
-        let score = -quiescence_search(board, nodes, alpha, beta, should_stop);
+        let score = -quiescence_search(board, nodes, -beta, -alpha, should_stop);
         board.unmake_last_move();
         if score >= beta {
             return beta;
