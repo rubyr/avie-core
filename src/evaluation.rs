@@ -186,9 +186,9 @@ fn search(
         board.make_move(*mov);
         let score = -search(board, depth - 1, nodes, -beta, -alpha, /*table,*/ should_stop);
         board.unmake_last_move();
-        if score >= beta {
-            return beta;
-        }
+        //if score >= beta {
+        //    return beta;
+        //}
         alpha = std::cmp::max(alpha, score);
     }
 
