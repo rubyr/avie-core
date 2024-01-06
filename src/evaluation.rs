@@ -20,7 +20,6 @@ static KNIGHT_SCORE: i64 = 300;
 static BISHOP_SCORE: i64 = 300;
 static ROOK_SCORE: i64 = 500;
 static QUEEN_SCORE: i64 = 900;
-static KING_SCORE: i64 = 20000;
 pub enum ScoreType {
     Exact,
     LowerBound,
@@ -63,8 +62,7 @@ fn piece_score(player: &PlayerState) -> i64 {
     let bishops = BISHOP_SCORE * player.bishops.count_ones() as i64;
     let rooks = ROOK_SCORE * player.rooks.count_ones() as i64;
     let queens = QUEEN_SCORE * player.queens.count_ones() as i64;
-    let king = KING_SCORE * player.king.count_ones() as i64;
-    king + queens + rooks + bishops + knights + pawns
+    queens + rooks + bishops + knights + pawns
 }
 
 fn evaluate_position(board: &mut BoardState) -> i64 {
@@ -74,7 +72,7 @@ fn evaluate_position(board: &mut BoardState) -> i64 {
     let piece_score = piece_score(player) - piece_score(opponent);
     let position_score =
         position_score(player, is_player_black) - position_score(opponent, !is_player_black);
-    piece_score //+ position_score
+    piece_score + position_score
 }
 
 fn value_from_piece_type(piece: PieceType) -> i64 {
@@ -84,7 +82,7 @@ fn value_from_piece_type(piece: PieceType) -> i64 {
         PieceType::Bishop(_) => BISHOP_SCORE,
         PieceType::Rook(_) => ROOK_SCORE,
         PieceType::Queen(_) => QUEEN_SCORE,
-        PieceType::King(_) => KING_SCORE,
+        PieceType::King(_) => 0, //game over is evaluated in other places
     }
 }
 
@@ -114,7 +112,7 @@ fn move_score(board: &BoardState, mov: &Move) -> i64 {
         board.en_passant_target,
         board.active_player,
     );
-    if 1u64 << mov.from & (opponent_pawns[0] | opponent_pawns[1]) != 0 {
+    if 1u64 << mov.to & (opponent_pawns[0] | opponent_pawns[1]) != 0 {
         result -= value_from_piece_type(our_piece);
     }
     result
@@ -255,7 +253,7 @@ pub fn choose_best_move(
         print!(
             "{}: {}, ",
             move_to_algebraic(&moves[i], board),
-            -move_score(board, &moves[i])
+            move_score(board, &moves[i])
         );
     }
     return (moves[0], best_score);
