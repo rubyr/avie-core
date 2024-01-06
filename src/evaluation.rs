@@ -17,7 +17,7 @@ static WORST_SCORE: i64 = -i64::MAX;
 
 static PAWN_SCORE: i64 = 100;
 static KNIGHT_SCORE: i64 = 300;
-static BISHOP_SCORE: i64 = 300;
+static BISHOP_SCORE: i64 = 320;
 static ROOK_SCORE: i64 = 500;
 static QUEEN_SCORE: i64 = 900;
 static KING_SCORE: i64 = 20000;
@@ -74,7 +74,7 @@ fn evaluate_position(board: &mut BoardState) -> i64 {
     let piece_score = piece_score(player) - piece_score(opponent);
     let position_score =
         position_score(player, is_player_black) - position_score(opponent, !is_player_black);
-    piece_score + position_score
+    piece_score //+ position_score
 }
 
 fn value_from_piece_type(piece: PieceType) -> i64 {
@@ -159,7 +159,7 @@ fn search(
     nodes: &mut u64,
     mut alpha: i64,
     beta: i64,
-    table: &mut HashMap<u64, MoveData>,
+    //table: &mut HashMap<u64, MoveData>,
     should_stop: &AtomicBool,
 ) -> i64 {
     if should_stop.load(Ordering::Relaxed) {
@@ -184,7 +184,7 @@ fn search(
     for mov in moves {
         *nodes += 1;
         board.make_move(*mov);
-        let score = -search(board, depth - 1, nodes, -beta, -alpha, table, should_stop);
+        let score = -search(board, depth - 1, nodes, -beta, -alpha, /*table,*/ should_stop);
         board.unmake_last_move();
         if score >= beta {
             return beta;
@@ -201,7 +201,6 @@ pub fn choose_best_move(
     table: &mut HashMap<u64, MoveData>,
     should_stop: &AtomicBool,
 ) -> (Move, i64) {
-    let mut nodes = 0;
     let start_time = std::time::Instant::now();
     if moves.is_empty() {
         if board.is_in_check() {
@@ -225,7 +224,7 @@ pub fn choose_best_move(
                 &mut nodes,
                 WORST_SCORE,
                 BEST_SCORE,
-                table,
+                //table,
                 should_stop,
             );
             board.unmake_last_move();
