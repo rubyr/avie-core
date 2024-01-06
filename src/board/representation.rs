@@ -12,6 +12,14 @@ pub struct PlayerState {
     pub queen_castle: bool,
 }
 
+#[test]
+fn loud_moves_only() {
+    let mut board = BoardState::default();
+    let mut moves = [Move::default(); 218];
+    let moves = board.generate_moves(&mut moves, true);
+    dbg!(moves);
+}
+
 impl PlayerState {
     ///function uses a quirk of binary representation to verify that there are no duplicate pieces on the board.
     /// when no bits are shared between two numbers, addition gives the same result as binary OR. by adding all
