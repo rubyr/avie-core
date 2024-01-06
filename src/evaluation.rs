@@ -17,7 +17,7 @@ static WORST_SCORE: i64 = -i64::MAX;
 
 static PAWN_SCORE: i64 = 100;
 static KNIGHT_SCORE: i64 = 300;
-static BISHOP_SCORE: i64 = 320;
+static BISHOP_SCORE: i64 = 300;
 static ROOK_SCORE: i64 = 500;
 static QUEEN_SCORE: i64 = 900;
 static KING_SCORE: i64 = 20000;
