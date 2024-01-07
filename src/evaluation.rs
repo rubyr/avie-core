@@ -132,7 +132,7 @@ fn quiescence_search(
 ) -> i64 {
     //stand_pat should be skipped if in lategame
     if should_stop.load(Ordering::Relaxed) {
-        return WORST_SCORE;
+        return alpha;
     }
     let stand_pat = evaluate_position(board);
     let mut move_list = [Move::default(); 218];
@@ -146,7 +146,7 @@ fn quiescence_search(
         let score = -quiescence_search(board, nodes, -beta, -alpha, should_stop);
         board.unmake_last_move();
         if should_stop.load(Ordering::Relaxed) {
-            return WORST_SCORE;
+            return alpha;
         }
         if score >= beta {
             return beta;
@@ -166,7 +166,7 @@ fn search(
     should_stop: &AtomicBool,
 ) -> i64 {
     if should_stop.load(Ordering::Relaxed) {
-        return WORST_SCORE;
+        return alpha;
     }
 
     if depth == 0 {
@@ -175,14 +175,14 @@ fn search(
             return score;
         }
         else {
-            return WORST_SCORE;
+            return alpha;
         }
     }
     let mut moves = [Move::default(); 218];
     let moves = board.generate_moves(&mut moves, false);
     if moves.is_empty() {
         if board.is_in_check() {
-            return WORST_SCORE;
+            return alpha;
         }
         return 0; //draw
     }
@@ -193,7 +193,7 @@ fn search(
         let score = -search(board, depth - 1, nodes, -beta, -alpha, /*table,*/ should_stop);
         board.unmake_last_move();
         if should_stop.load(Ordering::Relaxed) {
-            return WORST_SCORE;
+            return alpha;
         }
         if score >= beta {
             return beta;
