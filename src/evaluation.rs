@@ -135,12 +135,14 @@ fn quiescence_search(
         return alpha;
     }
     let stand_pat = evaluate_position(board);
+    if stand_pat >= beta {
+        return beta;
+    }
+    if alpha < stand_pat {
+        alpha = stand_pat;
+    }
     let mut move_list = [Move::default(); 218];
     let moves = board.generate_moves(&mut move_list, true);
-    dbg!(&moves);
-    if moves.is_empty() {
-        return stand_pat;
-    }
     for mov in moves {
         *nodes += 1;
         board.make_move(*mov);
