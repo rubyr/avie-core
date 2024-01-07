@@ -132,7 +132,7 @@ fn quiescence_search(
 ) -> i64 {
     //stand_pat should be skipped if in lategame
     if should_stop.load(Ordering::Relaxed) {
-        return WORST_SCORE;
+        return 0x81000000abad1deau64 as i64;
     }
     let stand_pat = evaluate_position(board);
     let mut move_list = [Move::default(); 218];
@@ -143,7 +143,7 @@ fn quiescence_search(
         let score = -quiescence_search(board, nodes, -beta, -alpha, should_stop);
         board.unmake_last_move();
         if should_stop.load(Ordering::Relaxed) {
-            return WORST_SCORE;
+            return 0x80000000abad1deau64 as i64;
         }
         if score >= beta {
             return beta;
