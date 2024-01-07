@@ -142,12 +142,15 @@ fn quiescence_search(
         board.make_move(*mov);
         let score = -quiescence_search(board, nodes, -beta, -alpha, should_stop);
         board.unmake_last_move();
+        if should_stop.load(Ordering::Relaxed) {
+            return WORST_SCORE;
+        }
         if score >= beta {
             return beta;
         }
         alpha = std::cmp::max(alpha, score);
     }
-    std::cmp::max(stand_pat, alpha)
+    alpha
 }
 
 fn search(
@@ -168,6 +171,9 @@ fn search(
         if !should_stop.load(Ordering::Relaxed) {
             return score;
         }
+        else {
+            return WORST_SCORE;
+        }
     }
     let mut moves = [Move::default(); 218];
     let moves = board.generate_moves(&mut moves, false);
@@ -183,6 +189,9 @@ fn search(
         board.make_move(*mov);
         let score = -search(board, depth - 1, nodes, -beta, -alpha, /*table,*/ should_stop);
         board.unmake_last_move();
+        if should_stop.load(Ordering::Relaxed) {
+            return WORST_SCORE;
+        }
         if score >= beta {
             return beta;
         }
